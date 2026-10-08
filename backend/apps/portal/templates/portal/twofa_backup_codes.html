@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% block title %}Backup codes · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-md mx-auto mt-10">
+  <h1 class="text-xl font-semibold mb-2">{% if first_time %}2FA is on. {% endif %}Save your backup codes</h1>
+  <p class="text-sm text-ink/60 mb-4">
+    If you lose your phone, each of these codes lets you sign in <strong>once</strong>.
+    Store them somewhere safe (a password manager, or printed and locked away).
+    <strong>This is the only time they are shown.</strong>{% if not first_time %} Your old codes no longer work.{% endif %}
+  </p>
+  <div class="bg-surface rounded-lg shadow-sm p-6" x-data="{ copied: false }">
+    <ul id="codes" class="grid grid-cols-2 gap-2 font-mono text-lg text-center">
+      {% for c in codes %}<li class="bg-bg rounded-md py-1">{{ c }}</li>{% endfor %}
+    </ul>
+    <div class="flex gap-2 mt-4 text-sm">
+      <button type="button" class="flex-1 border border-ink/20 hover:border-orange rounded-md py-2"
+              @click="navigator.clipboard.writeText([...document.querySelectorAll('#codes li')].map(e => e.textContent).join('\n')); copied = true"
+              x-text="copied ? 'Copied' : 'Copy all'">Copy all</button>
+      <button type="button" onclick="window.print()" class="flex-1 border border-ink/20 hover:border-orange rounded-md py-2">Print</button>
+    </div>
+  </div>
+  <a href="{% if user.user_type == 'staff' %}{% url 'portal:admin_dashboard' %}{% else %}{% url 'portal:dashboard' %}{% endif %}"
+     class="block text-center mt-6 bg-orange hover:bg-orange-dark text-white rounded-md py-2">I've saved them — continue</a>
+</div>
+{% endblock %}

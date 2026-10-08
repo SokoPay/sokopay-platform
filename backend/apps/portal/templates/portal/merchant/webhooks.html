@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block title %}Webhooks · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Developer · Webhooks</h1>
+<p class="text-sm text-ink/60 mb-4">We POST signed JSON to your server when payments, refunds, settlements and disputes change. Verify the <code>SokoPay-Signature</code> header (HMAC-SHA256 of <code>"&lt;t&gt;.&lt;body&gt;"</code>), reject timestamps older than 5 minutes, and de-duplicate on the event <code>id</code>. <a class="text-orange" href="{% url 'portal:api_keys' %}">API keys</a></p>
+{% if shown_secret %}
+<div class="bg-ink text-white rounded-lg p-4 mb-4"><p class="text-sm mb-2">Signing secret. Copy it now; it won't be shown again.</p><code class="font-mono text-sm break-all">{{ shown_secret }}</code></div>
+{% endif %}
+<form method="post" class="bg-surface rounded-lg shadow-sm p-4 mb-6 text-sm space-y-2">{% csrf_token %}<input type="hidden" name="action" value="add">
+  <input name="url" required placeholder="https://your-server.example/sokopay/webhook" class="w-full border border-gray-200 rounded-md px-3 py-2">
+  <div class="flex flex-wrap gap-3 text-xs">{% for e in events %}<label class="flex items-center gap-1"><input type="checkbox" name="events" value="{{ e }}"> {{ e }}</label>{% endfor %}<span class="text-ink/40">(none ticked = all events)</span></div>
+  <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Add webhook</button>
+</form>
+<div class="space-y-2 mb-8">{% for ep in endpoints %}
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm flex flex-wrap items-center gap-3">
+    <div class="flex-1 min-w-[16rem]"><div class="font-mono break-all">{{ ep.url }}</div>
+      <div class="text-xs text-ink/50">{% if ep.active %}<span class="text-success">On</span>{% else %}<span class="text-danger">Off</span> {{ ep.disabled_reason }}{% endif %} · {% if ep.events %}{{ ep.events|join:", " }}{% else %}all events{% endif %}{% if ep.consecutive_failures %} · {{ ep.consecutive_failures }} failures in a row{% endif %}</div></div>
+    <form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="endpoint" value="{{ ep.pk }}">
+      <button name="action" value="test" class="border border-ink/20 rounded-md px-3 py-1">Send test</button>
+      <button name="action" value="toggle" class="border border-ink/20 rounded-md px-3 py-1">{% if ep.active %}Switch off{% else %}Switch on{% endif %}</button>
+      <button name="action" value="rotate" class="border border-ink/20 rounded-md px-3 py-1" onclick="return confirm('Create a new secret? The old one stops working immediately.')">New secret</button>
+      <button name="action" value="delete" class="border border-danger text-danger rounded-md px-3 py-1" onclick="return confirm('Remove this webhook?')">Remove</button></form>
+  </div>{% empty %}<div class="text-ink/40 text-sm">No webhooks yet.</div>{% endfor %}</div>
+<h2 class="font-medium mb-2">Recent deliveries</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">When</th><th>Event</th><th>URL</th><th>Status</th><th>Tries</th><th>Last result</th></tr></thead>
+  <tbody>{% for d in deliveries %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ d.created_at|date:"d M H:i:s" }}</td><td class="font-mono text-xs">{{ d.event_type }}</td><td class="text-xs truncate max-w-[14rem]">{{ d.endpoint.url }}</td><td>{{ d.get_status_display }}</td><td>{{ d.attempts }}</td><td class="text-xs text-ink/50">{% if d.last_status_code %}HTTP {{ d.last_status_code }}{% endif %} {{ d.last_error }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="px-4 py-6 text-center text-ink/40">No deliveries yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

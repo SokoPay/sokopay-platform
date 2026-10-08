@@ -1,0 +1,99 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Bulk payment · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:bulk' %}" class="text-sm text-ink/60 hover:text-orange">← Bulk payments</a>
+<div class="flex items-start justify-between mt-2 mb-4 gap-4">
+  <div>
+    <h1 class="text-xl font-semibold">{{ batch.note|default:batch.source_filename }}</h1>
+    <div class="text-sm text-ink/60">Uploaded {{ batch.created_at|date:"d M Y, H:i" }} by {{ batch.created_by.full_name|default:batch.created_by.phone }}
+      · file <span class="font-mono">{{ batch.source_filename }}</span></div>
+  </div>
+  {% include "portal/_status_pill.html" with status=batch.status %}
+</div>
+
+<div class="grid sm:grid-cols-4 gap-3 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Recipients</div>
+    <div class="text-lg font-semibold tabular-nums">{{ batch.valid_count }}{% if batch.invalid_count %} <span class="text-sm text-warning font-normal">+{{ batch.invalid_count }} invalid</span>{% endif %}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Amount</div><div class="text-lg font-semibold tabular-nums">{{ amount_display }}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Fees</div><div class="text-lg font-semibold tabular-nums">{{ fee_display }}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Total to reserve</div><div class="text-lg font-semibold tabular-nums">{{ needed_display }}</div>
+    <div class="text-xs text-ink/40">Available {{ available_display }}</div></div>
+</div>
+
+{% if batch.status == 'processing' or batch.status == 'completed' or batch.status == 'completed_with_failures' %}
+  {% include "portal/merchant/_bulk_progress.html" %}
+{% endif %}
+
+{% if batch.status == 'awaiting_approval' or batch.status == 'rejected' or batch.status == 'processing' or batch.status == 'completed' or batch.status == 'completed_with_failures' %}
+  {% if batch.approved_by %}
+  <p class="text-sm text-ink/60 mb-4">{% if batch.status == 'rejected' %}Rejected{% else %}Approved{% endif %} by {{ batch.approved_by.full_name|default:batch.approved_by.phone }}
+    on {{ batch.decided_at|date:"d M Y, H:i" }}{% if batch.self_approved %} <span class="text-warning">(self-approved — sole approver)</span>{% endif %}{% if batch.decision_note %} — “{{ batch.decision_note }}”{% endif %}</p>
+  {% endif %}
+{% endif %}
+
+<div class="flex flex-wrap gap-3 mb-6">
+  {% if can_submit %}
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3 text-sm">
+    {% csrf_token %}<input type="hidden" name="action" value="submit">
+    {% if batch.invalid_count %}
+      <label class="flex items-center gap-2"><input type="checkbox" name="exclude_invalid" value="1"> Skip the {{ batch.invalid_count }} invalid row{{ batch.invalid_count|pluralize }} and pay the rest</label>
+    {% endif %}
+    <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Submit for approval</button>
+  </form>
+  {% endif %}
+
+  {% if can_approve %}
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-4 flex flex-wrap items-center gap-3 text-sm">
+    {% csrf_token %}
+    <input name="note" maxlength="255" placeholder="Note (optional)" class="border border-gray-200 rounded-md px-3 py-2">
+    <button name="action" value="approve" class="bg-success text-white rounded-md px-4 py-2"
+            onclick="return confirm('Approve and pay {{ batch.valid_count }} recipients, reserving {{ needed_display }} now?')">Approve &amp; pay</button>
+    <button name="action" value="reject" class="border border-danger text-danger rounded-md px-4 py-2">Reject</button>
+    {% if self_approval %}<span class="text-xs text-warning">You uploaded this batch; as the only approver you may approve it yourself. This is recorded.</span>{% endif %}
+  </form>
+  {% elif batch.status == 'awaiting_approval' and is_maker %}
+  <p class="text-sm text-ink/60 bg-surface rounded-lg shadow-sm p-4">Waiting for another Owner or Finance user to approve. You cannot approve a batch you uploaded.</p>
+  {% endif %}
+
+  {% if can_cancel %}
+  <form method="post" class="flex items-center">{% csrf_token %}<input type="hidden" name="action" value="cancel">
+    <button class="text-sm text-ink/60 hover:text-danger px-3 py-2">Cancel batch</button></form>
+  {% endif %}
+
+  {% if batch.is_final or batch.status == 'processing' %}
+  <a href="{% url 'portal:bulk_results' batch.pk %}" hx-boost="false" class="text-sm border border-ink/20 hover:border-orange rounded-md px-3 py-2">Download results .csv</a>
+  {% endif %}
+</div>
+
+<div class="flex items-center justify-between mb-2">
+  <h2 class="font-medium">Rows <span class="text-ink/40 text-sm">({{ shown }} of {{ batch.total_count }})</span></h2>
+  <div class="text-sm">
+    <a href="?rows=" class="{% if not rows_filter %}text-orange{% else %}text-ink/60{% endif %}">All</a> ·
+    <a href="?rows=problems" class="{% if rows_filter == 'problems' %}text-orange{% else %}text-ink/60{% endif %}">Problems only</a>
+  </div>
+</div>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-4 py-2">#</th><th>Name</th><th>Pay to</th><th>Account</th><th class="text-right">Amount</th><th class="text-right">Fee</th><th class="px-4">Status</th><th>Detail</th></tr>
+    </thead>
+    <tbody>
+      {% for i in items %}
+      <tr class="border-t border-gray-50 {% if i.status == 'invalid' or i.status == 'failed' %}bg-red-50/40{% endif %}">
+        <td class="px-4 py-2 text-ink/40">{{ i.row_number }}</td>
+        <td>{{ i.recipient_name }}</td>
+        <td>{{ i.get_destination_type_display|default:"—" }}{% if i.institution and i.institution != 'sokopay' %} · {{ i.institution }}{% endif %}</td>
+        <td class="font-mono text-xs">{{ i.account }}</td>
+        <td class="text-right tabular-nums">{% if i.amount_minor %}{{ i.amount_minor|ghs }}{% else %}—{% endif %}</td>
+        <td class="text-right tabular-nums text-ink/60">{{ i.fee_minor|ghs }}</td>
+        <td class="px-4">{% include "portal/_status_pill.html" with status=i.status %}</td>
+        <td class="text-xs {% if i.status == 'invalid' or i.status == 'failed' %}text-danger{% else %}text-ink/50{% endif %}">{{ i.error|default:i.narrative }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="px-4 py-8 text-center text-ink/40">No rows match.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

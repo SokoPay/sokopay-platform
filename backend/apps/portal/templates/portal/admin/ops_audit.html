@@ -1,0 +1,13 @@
+{% extends "portal/base.html" %}
+{% block title %}Audit log · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Audit log</h1>
+<p class="text-sm text-ink/60 mb-4">Every privileged action, append-only. Search by action, person, object id or request id. Exports are themselves recorded.</p>
+<form method="get" class="flex gap-2 mb-4 text-sm"><input name="q" value="{{ q }}" placeholder="e.g. kyc.hold, pricing, 0244…, request id" class="flex-1 border border-gray-200 rounded-md px-3 py-2">
+  <button class="border border-ink/20 rounded-md px-4">Search</button>
+  <button name="format" value="csv" class="bg-orange text-white rounded-md px-4">Export CSV</button></form>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-xs">
+  <thead class="text-ink/50 text-left"><tr><th class="px-3 py-2">When</th><th>Who</th><th>Action</th><th>Object</th><th>Summary</th><th>Request</th></tr></thead>
+  <tbody>{% for e in events %}<tr class="border-t border-gray-50"><td class="px-3 py-1 whitespace-nowrap">{{ e.at|date:"d M Y H:i:s" }}</td><td>{{ e.actor_label }}</td><td class="font-mono">{{ e.action }}</td><td class="font-mono">{{ e.object_type }} {{ e.object_id|truncatechars:12 }}</td><td>{{ e.summary }}</td><td class="font-mono">{{ e.request_id|truncatechars:10 }}</td></tr>
+  {% empty %}<tr><td colspan="6" class="px-3 py-6 text-center text-ink/40">No events.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

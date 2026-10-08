@@ -1,0 +1,75 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Settlement approvals · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Settlement approvals</h1>
+<p class="text-sm text-ink/60 mb-4">
+  Maker-checker: you cannot approve a settlement you requested yourself.
+</p>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">Merchant</th><th class="text-right px-5">Amount</th>
+          <th>Destination</th><th>Requested by</th><th class="px-5"></th></tr>
+    </thead>
+    <tbody>
+      {% for s in settlements %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right px-5 tabular-nums font-medium">{{ s.amount_minor|ghs }}</td>
+        <td>{{ s.destination.provider }} · {{ s.destination.account_no }}</td>
+        <td>{{ s.requested_by.full_name|default:s.requested_by.phone }}</td>
+        <td class="px-5 text-right">
+          <form method="post" class="inline-flex gap-2">{% csrf_token %}
+            <input type="hidden" name="settlement" value="{{ s.id }}">
+            <button name="action" value="approve"
+                    class="bg-success text-white rounded-md px-3 py-1.5 text-xs">Approve</button>
+            <button name="action" value="reject"
+                    class="bg-danger text-white rounded-md px-3 py-1.5 text-xs">Reject</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-ink/40">Nothing awaiting approval.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 id="stuck" class="font-medium mt-8 mb-1">Stuck payouts</h2>
+<p class="text-sm text-ink/60 mb-3">
+  Paid out of the merchant's balance, but the payment partner hasn't confirmed after 24 hours —
+  or we never got a reference back (the partner may or may not have received it).
+  Re-check first; if still unresolved, confirm with the partner's operations team before any manual action.
+</p>
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">Merchant</th><th class="text-right px-5">Amount</th><th>Destination</th>
+          <th>Partner ref</th><th>Since</th><th class="px-5"></th></tr>
+    </thead>
+    <tbody>
+      {% for s in stuck %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right px-5 tabular-nums font-medium">{{ s.amount_minor|ghs }}</td>
+        <td>{{ s.destination.get_kind_display }} · {{ s.destination.provider }} · {{ s.destination.account_no }}</td>
+        <td class="font-mono text-xs">{{ s.rail }} {{ s.rail_ref|default:"— none —" }}</td>
+        <td>{{ s.updated_at|date:"d M, H:i" }}</td>
+        <td class="px-5 text-right">
+          {% if s.rail_ref %}
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="settlement" value="{{ s.id }}">
+            <button name="action" value="recheck" class="border border-ink/20 hover:border-orange rounded-md px-3 py-1.5 text-xs">Re-check</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-ink/40">No stuck payouts.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

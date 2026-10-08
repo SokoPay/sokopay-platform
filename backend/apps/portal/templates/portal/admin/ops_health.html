@@ -1,0 +1,9 @@
+{% extends "portal/base.html" %}
+{% block title %}System health · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">System health</h1>
+<p class="text-sm text-ink/60 mb-4">The numbers that need a person. The same figures are logged every 5 minutes and raise alarms in CloudWatch.</p>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm"><tbody>
+{% for label, value, url, bad in rows %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{% if url %}<a class="hover:text-orange" href="{% url url %}">{{ label }}</a>{% else %}{{ label }}{% endif %}</td><td class="px-4 text-right tabular-nums font-semibold {% if bad %}text-danger{% else %}text-success{% endif %}">{{ value }}</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

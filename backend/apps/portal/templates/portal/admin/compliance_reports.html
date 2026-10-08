@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block title %}Reports · Compliance{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Regulatory reports</h1>
+{% include "portal/admin/_compliance_nav.html" %}
+
+<div class="bg-surface rounded-lg shadow-sm p-4 mb-5 flex flex-wrap items-center justify-between gap-3 text-sm">
+  <div><span class="font-medium">Large-transaction reports</span> — {{ ltr_pending }} not yet exported.</div>
+  <form method="post" action="{% url 'portal:compliance_ltr_export' %}" hx-boost="false">{% csrf_token %}
+    <button class="border border-ink/20 hover:border-orange rounded-md px-3 py-1.5">Export new rows (.csv)</button>
+  </form>
+</div>
+
+<h2 class="font-medium mb-2">Suspicious transaction reports</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Created</th><th>Subject</th><th>Status</th><th>Prepared</th><th>Approved</th><th>FIC ref</th><th></th></tr></thead>
+    <tbody>
+      {% for r in reports %}
+      <tr class="border-t border-gray-50">
+        <td class="px-4 py-2">{{ r.created_at|date:"d M Y" }}</td><td>{{ r.subject_label }}</td><td>{{ r.get_status_display }}</td>
+        <td>{{ r.prepared_by.full_name }}</td><td>{{ r.approved_by.full_name|default:"—" }}</td><td class="font-mono">{{ r.fic_reference|default:"—" }}</td>
+        <td class="px-4 text-right"><a class="text-orange" href="{% url 'portal:compliance_str' r.pk %}">Open</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="7" class="px-4 py-8 text-center text-ink/40">No reports yet. Draft one from an alert.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

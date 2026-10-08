@@ -1,0 +1,8 @@
+{% extends "checkout/base.html" %}
+{% block title %}Legal · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-3">Legal</h1>
+<div class="bg-surface rounded-xl shadow-sm divide-y divide-gray-100">
+{% for slug, title in docs.items %}<a href="/legal/{{ slug }}" class="block px-5 py-3 hover:text-orange">{{ title }}</a>{% endfor %}
+</div>
+{% endblock %}

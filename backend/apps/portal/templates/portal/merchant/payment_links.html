@@ -1,0 +1,24 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Payment links · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Payment links</h1>
+<p class="text-sm text-ink/60 mb-4">Share a link on WhatsApp, Instagram or an invoice. Customers pay by mobile money on a SokoPay page; the money lands in your balance like any other payment. Websites can create one-off checkouts with the API (<code>POST /api/v1/merchant/checkout-sessions</code>).</p>
+<form method="post" class="bg-surface rounded-lg shadow-sm p-4 mb-6 grid md:grid-cols-4 gap-2 text-sm">{% csrf_token %}
+  <input name="title" required placeholder="What it's for (customer sees this)" class="md:col-span-2 border border-gray-200 rounded-md px-3 py-2">
+  <input name="amount" placeholder="Amount GH&#8373; (blank = customer enters)" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="max_uses" placeholder="Max payments (blank = unlimited)" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="description" placeholder="Details (optional)" class="md:col-span-3 border border-gray-200 rounded-md px-3 py-2">
+  <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Create link</button>
+</form>
+<div class="space-y-3">{% for link, url, qr in rows %}
+  <div class="bg-surface rounded-lg shadow-sm p-4 flex flex-wrap gap-4 items-center text-sm">
+    <img src="{{ qr }}" alt="QR code" class="w-24 h-24">
+    <div class="flex-1 min-w-[14rem]">
+      <div class="font-medium">{{ link.title }} {% if link.amount_minor %}· {{ link.amount_minor|ghs }}{% else %}· any amount{% endif %}</div>
+      <div class="font-mono text-xs break-all text-ink/70">{{ url }}</div>
+      <div class="text-xs text-ink/50">{{ link.uses }} payment{{ link.uses|pluralize }}{% if link.max_uses %} of {{ link.max_uses }}{% endif %} · {% if link.active %}<span class="text-success">active</span>{% else %}<span class="text-danger">off</span>{% endif %}</div>
+    </div>
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="toggle"><input type="hidden" name="link" value="{{ link.pk }}"><button class="border border-ink/20 rounded-md px-3 py-1">{% if link.active %}Switch off{% else %}Switch on{% endif %}</button></form>
+  </div>{% empty %}<div class="text-ink/40 text-sm">No links yet.</div>{% endfor %}</div>
+{% endblock %}

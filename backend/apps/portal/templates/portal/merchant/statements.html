@@ -1,0 +1,12 @@
+{% extends "portal/base.html" %}
+{% block title %}Statements · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Statements</h1>
+<p class="text-sm text-ink/60 mb-4">Every movement on your SokoPay balance: takings (after fees), refunds, settlements and bulk payments, with the running balance. Up to 366 days at a time.</p>
+<form method="get" class="bg-surface rounded-lg shadow-sm p-4 flex flex-wrap items-end gap-3 text-sm">
+  <label>From<br><input type="date" name="from" value="{{ default_from }}" class="border border-gray-200 rounded-md px-3 py-2"></label>
+  <label>To<br><input type="date" name="to" value="{{ default_to }}" class="border border-gray-200 rounded-md px-3 py-2"></label>
+  <button name="format" value="pdf" class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Download PDF</button>
+  <button name="format" value="csv" class="border border-ink/20 rounded-md px-4 py-2">Download CSV</button>
+</form>
+{% endblock %}

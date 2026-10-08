@@ -1,0 +1,33 @@
+{% extends "portal/base.html" %}
+{% block title %}STR · Compliance{% endblock %}
+{% block content %}
+{% include "portal/admin/_compliance_nav.html" %}
+<h1 class="text-xl font-semibold mb-1">Suspicious transaction report</h1>
+<p class="text-sm text-ink/60 mb-4">{{ r.subject_label }} · {{ r.get_status_display }} · prepared by {{ r.prepared_by.full_name }} on {{ r.created_at|date:"d M Y H:i" }}{% if r.approved_by %} · approved by {{ r.approved_by.full_name }}{% endif %}{% if r.fic_reference %} · FIC ref <span class="font-mono">{{ r.fic_reference }}</span>{% endif %}</p>
+
+<div class="grid md:grid-cols-3 gap-4">
+  <div class="md:col-span-2 space-y-4">
+    <div class="bg-surface rounded-lg shadow-sm p-4 text-sm"><h2 class="font-medium mb-2">Narrative</h2>{{ r.narrative|linebreaksbr }}</div>
+    <div class="bg-surface rounded-lg shadow-sm p-4 text-sm"><h2 class="font-medium mb-2">Alerts</h2>
+      <ul>{% for a in alerts %}<li><a class="text-orange" href="{% url 'portal:compliance_alert' a.pk %}">{{ a.rule }}</a> — {{ a.title }} ({{ a.hits }} hits)</li>{% endfor %}</ul>
+    </div>
+    <div class="bg-surface rounded-lg shadow-sm p-4 text-sm"><h2 class="font-medium mb-2">Transactions snapshot ({{ r.transactions|length }})</h2>
+      <table class="w-full text-xs"><tbody>{% for t in r.transactions %}<tr class="border-t border-gray-50"><td class="py-1">{{ t.created_at|slice:":16" }}</td><td>{{ t.title }}</td><td class="text-right">{{ t.amount_display }}</td><td>{{ t.status }}</td></tr>{% endfor %}</tbody></table>
+    </div>
+  </div>
+  <div class="space-y-3 text-sm">
+    <a href="{% url 'portal:compliance_str_download' r.pk %}" hx-boost="false" class="block text-center border border-ink/20 hover:border-orange rounded-md py-2">Download (.json)</a>
+    {% if r.status == 'draft' %}
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-4">{% csrf_token %}
+      <p class="text-xs text-ink/50 mb-2">A different compliance officer from the preparer must approve.</p>
+      <button name="action" value="approve" class="w-full bg-ink text-white rounded-md py-2">Approve</button>
+    </form>
+    {% elif r.status == 'approved' %}
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-4 space-y-2">{% csrf_token %}
+      <input name="fic_reference" required placeholder="FIC submission reference" class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <button name="action" value="file" class="w-full bg-danger text-white rounded-md py-2">Mark as filed with FIC</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

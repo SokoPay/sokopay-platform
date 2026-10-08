@@ -1,0 +1,31 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Agents · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Agents</h1>
+<div class="grid md:grid-cols-3 gap-4 mb-6">
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-4 space-y-2 text-sm">{% csrf_token %}
+    <h2 class="font-medium">Register an agent</h2>
+    <p class="text-xs text-ink/50">The person must already have a SokoPay account (phone or wallet ID).</p>
+    <input name="phone" required placeholder="Phone or wallet ID" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <input name="display_name" placeholder="Shop / kiosk name" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <input name="location" placeholder="Location (e.g. Madina market)" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Register (pending)</button>
+  </form>
+  <div class="md:col-span-2 text-sm flex flex-wrap gap-3 items-start">
+    <a href="?" class="{% if not status %}text-orange{% endif %}">All</a>
+    <a href="?status=pending" class="{% if status == 'pending' %}text-orange{% endif %}">Pending</a>
+    <a href="?status=active" class="{% if status == 'active' %}text-orange{% endif %}">Active</a>
+    <a href="?status=suspended" class="{% if status == 'suspended' %}text-orange{% endif %}">Suspended</a>
+    <a href="{% url 'portal:ops_float' %}" class="ml-auto border border-ink/20 hover:border-orange rounded-md px-3 py-1">Float top-up approvals</a>
+    <a href="{% url 'portal:ops_cashouts' %}" class="border border-ink/20 hover:border-orange rounded-md px-3 py-1">Cash-out monitor</a>
+  </div>
+</div>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Agent</th><th>Phone</th><th>Location</th><th>Status</th><th class="text-right">Float</th><th></th></tr></thead>
+  <tbody>{% for a, f in rows %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ a.display_name }}</td><td>{{ a.user.phone }}</td><td>{{ a.location|default:"—" }}</td>
+    <td>{% include "portal/_status_pill.html" with status=a.status %}</td><td class="text-right tabular-nums">{{ f|ghs }}</td>
+    <td class="px-4 text-right"><a class="text-orange" href="{% url 'portal:ops_agent' a.pk %}">Open</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="px-4 py-8 text-center text-ink/40">No agents yet.</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

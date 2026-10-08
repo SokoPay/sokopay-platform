@@ -1,0 +1,101 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Safeguarding · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">E-money safeguarding</h1>
+<p class="text-sm text-ink/60 mb-6">
+  Every cedi customers and agents hold as e-money must be backed by a cedi in the trust
+  account(s). The check runs daily at 05:00 and whenever a balance is recorded here.
+</p>
+
+<div class="grid sm:grid-cols-3 gap-4 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">E-money owed now</div>
+    <div class="text-2xl font-semibold mt-1 tabular-nums">{{ liabilities|ghs }}</div>
+    <div class="text-xs text-ink/40 mt-1">Wallets + agent float + transfers in flight</div>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">Trust funds (last check)</div>
+    <div class="text-2xl font-semibold mt-1 tabular-nums">
+      {% if latest and latest.trust_total_minor is not None %}{{ latest.trust_total_minor|ghs }}{% else %}—{% endif %}
+    </div>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">Last check</div>
+    {% if latest %}
+      <div class="mt-2">
+        <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium
+          {% if latest.status == 'ok' %}bg-green-100 text-success{% else %}bg-red-100 text-danger{% endif %}">
+          {{ latest.get_status_display }}</span>
+      </div>
+      <div class="text-xs text-ink/40 mt-1">{{ latest.created_at|date:"d M Y, H:i" }}
+        {% if latest.surplus_minor is not None %} · surplus {{ latest.surplus_minor|ghs }}{% endif %}</div>
+    {% else %}
+      <div class="text-sm mt-2 text-ink/40">No check yet.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm p-5 mb-6">
+  <h2 class="font-medium mb-3">Trust accounts</h2>
+  {% if accounts %}
+  <table class="w-full text-sm mb-4">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="py-2">Account</th><th class="text-right">Latest balance</th><th class="px-4">As of</th></tr>
+    </thead>
+    <tbody>
+      {% for a, b in accounts %}
+      <tr class="border-t border-gray-50">
+        <td class="py-2">{{ a.account_name }} — {{ a }}</td>
+        <td class="text-right tabular-nums">{% if b %}{{ b.balance_minor|ghs }}{% else %}—{% endif %}</td>
+        <td class="px-4 text-ink/60">{% if b %}{{ b.as_of|date:"d M Y, H:i" }} ({{ b.get_source_display }}){% else %}never{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" class="flex flex-wrap items-end gap-2 text-sm">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="record">
+    <label>Account
+      <select name="account" class="block border border-gray-200 rounded-md px-3 py-2 mt-1">
+        {% for a, b in accounts %}<option value="{{ a.id }}">{{ a }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Statement balance (GH₵)
+      <input name="balance" inputmode="decimal" placeholder="125000.00"
+             class="block border border-gray-200 rounded-md px-3 py-2 mt-1">
+    </label>
+    <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Record & check</button>
+  </form>
+  {% else %}
+  <p class="text-sm text-ink/60">No trust account set up. Add one in Django admin
+    (Safeguarding → Trust accounts) once the trust arrangement with the bank is in place.</p>
+  {% endif %}
+</div>
+
+<form method="post" class="mb-6">{% csrf_token %}
+  <button class="border border-ink/20 hover:border-orange rounded-md px-4 py-2 text-sm">Run check now</button>
+</form>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">When</th><th>Status</th><th class="text-right">Owed</th>
+          <th class="text-right">Trust</th><th class="text-right px-5">Surplus</th></tr>
+    </thead>
+    <tbody>
+      {% for c in history %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ c.created_at|date:"d M Y, H:i" }}</td>
+        <td>{{ c.get_status_display }}</td>
+        <td class="text-right tabular-nums">{{ c.liabilities_minor|ghs }}</td>
+        <td class="text-right tabular-nums">{% if c.trust_total_minor is not None %}{{ c.trust_total_minor|ghs }}{% else %}—{% endif %}</td>
+        <td class="text-right px-5 tabular-nums">{% if c.surplus_minor is not None %}{{ c.surplus_minor|ghs }}{% else %}—{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-ink/40">No checks yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

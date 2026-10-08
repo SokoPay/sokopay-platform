@@ -1,0 +1,30 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}{{ p.reference }} · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:payments' %}" class="text-sm text-ink/60 hover:text-orange">← Payments</a>
+<div class="flex flex-wrap justify-between items-start gap-4 mt-2 mb-5">
+  <div><h1 class="text-xl font-semibold font-mono">{{ p.reference }}</h1>
+    <div class="text-sm text-ink/60">{{ p.created_at|date:"d M Y, H:i" }} · {% if p.funding_source == 'wallet' %}SokoPay wallet{% else %}{{ p.network|upper }}{% endif %} · {{ p.payer_masked }}</div></div>
+  <div class="text-right">{% include "portal/_status_pill.html" with status=p.status %}<div class="text-2xl font-semibold tabular-nums mt-1">{{ p.amount_minor|ghs }}</div>
+    <div class="text-xs text-ink/50">fee {{ p.fee_minor|ghs }} · net {{ net|ghs }}</div></div>
+</div>
+{% if dispute %}<div class="bg-amber-50 rounded-md p-3 text-sm mb-4">Open dispute: {{ dispute.get_reason_display }} ({{ dispute.amount_minor|ghs }}). <a class="text-orange" href="{% url 'portal:disputes' %}">Answer it</a> by {{ dispute.respond_by|date:"d M Y" }}.</div>{% endif %}
+<div class="grid md:grid-cols-3 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm">
+    <h2 class="font-medium mb-2">Refund</h2>
+    {% if can_refund %}
+    <form method="post" class="space-y-2">{% csrf_token %}
+      <input name="amount" placeholder="Amount (blank = full {{ refundable|ghs }})" class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <input name="reason" required placeholder="Reason (the customer sees this)" class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2" onclick="return confirm('Refund this payment? Money leaves your SokoPay balance.')">Refund</button>
+      <p class="text-xs text-ink/50">The money goes back to the customer the way they paid. Your fee isn't returned.</p>
+    </form>
+    {% elif refundable %}<p class="text-ink/50">Refundable: {{ refundable|ghs }}. Only an Owner or Finance user can refund.</p>
+    {% else %}<p class="text-ink/50">Nothing left to refund.</p>{% endif %}
+  </div>
+  <div class="md:col-span-2 bg-surface rounded-lg shadow-sm p-4"><h2 class="font-medium mb-2">Refunds</h2>
+    <table class="w-full text-sm"><tbody>{% for r in refunds %}<tr class="border-t border-gray-50"><td class="py-1">{{ r.created_at|date:"d M H:i" }}</td><td class="tabular-nums">{{ r.amount_minor|ghs }}</td><td>{{ r.get_destination_display }}</td><td>{{ r.get_status_display }}</td><td class="text-xs text-ink/50">{{ r.reason }} · {{ r.requested_by.full_name }}</td></tr>{% empty %}<tr><td class="py-2 text-ink/40">No refunds.</td></tr>{% endfor %}</tbody></table>
+  </div>
+</div>
+{% endblock %}

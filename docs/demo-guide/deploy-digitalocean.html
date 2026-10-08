@@ -1,0 +1,542 @@
+<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide</title><style>
+@page { size: A4; margin: 16mm 15mm; }
+body { font-family: 'Segoe UI', Arial, sans-serif; color:#231F20; font-size:9.6pt; line-height:1.42; }
+h1 { font-size:19pt; border-bottom:3px solid #F26522; padding-bottom:2mm; }
+h2 { font-size:13.5pt; margin-top:7mm; border-bottom:2px solid #F26522; padding-bottom:1mm; page-break-after:avoid; }
+h3 { font-size:11pt; margin-top:4mm; page-break-after:avoid; }
+table { border-collapse:collapse; width:100%; font-size:8.6pt; margin:2mm 0; }
+th { background:#231F20; color:#fff; text-align:left; padding:1.2mm 1.8mm; }
+td { border-bottom:1px solid #E8E2DF; padding:1.2mm 1.8mm; vertical-align:top; }
+tr { page-break-inside:avoid; }
+code { font-family:Consolas,monospace; font-size:8.4pt; background:#F7F5F4; padding:0 1mm; }
+pre { background:#F7F5F4; border-radius:1.5mm; padding:2mm 3mm; white-space:pre-wrap; page-break-inside:avoid; }
+pre code { padding:0; }
+blockquote { background:#FFF4EC; border-left:3px solid #F26522; margin:2mm 0; padding:1mm 3mm; }
+hr { border:none; border-top:1px solid #E8E2DF; margin:4mm 0; }
+</style></head><body><h1>Deploying SokoPay to a DigitalOcean droplet (pilot test)</h1>
+<p>This guide sets up the whole SokoPay platform on <strong>one DigitalOcean droplet</strong>, running the way it will in production, so the apps and portals can be tested end to end. When testing is finished, section 11 wipes everything.</p>
+<p>The stack:</p>
+<ul>
+<li><strong>PostgreSQL 16</strong>, the production database. The local demo's SQLite file is only a laptop convenience.</li>
+<li><strong>Redis</strong>, for the cache and the task queue.</li>
+<li><strong>Celery</strong> workers and the scheduler.</li>
+<li><strong>Caddy</strong>, which gets and renews the HTTPS certificate automatically.</li>
+<li><strong>Docker Compose</strong>, which runs it all.</li>
+</ul>
+<blockquote>
+<p><strong>Test data only.</strong> The server runs the <code>staging</code> profile:</p>
+<ul>
+<li><strong>Same as production:</strong> HTTPS only, secure cookies, the encryption key required, PostgreSQL, JSON logs, debug off.</li>
+<li><strong>One difference:</strong> it runs against the <strong>mock payment partner</strong> until Korba or Nsano is contracted and certified.</li>
+</ul>
+<p>Every web page shows a "TEST ENVIRONMENT" banner. Do <strong>not</strong> enter real customers' data or real Ghana Card numbers. The droplet sits outside Ghana, which is fine for demo data but not for real customer data without Bank of Ghana and Data Protection Commission approval.</p>
+</blockquote>
+<hr />
+<h2>1. What you need</h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DigitalOcean account</td>
+<td>With billing set up.</td>
+</tr>
+<tr>
+<td>A domain name, or none</td>
+<td>Example: <code>test.sokopay.com.gh</code>. With no domain, use the free <code>sslip.io</code> name (section 4). The phone apps need real HTTPS, which Caddy provides automatically.</td>
+</tr>
+<tr>
+<td>An SSH key on your computer</td>
+<td>Create one in PowerShell: <code>ssh-keygen -t ed25519</code>.</td>
+</tr>
+<tr>
+<td>This repository on your computer</td>
+<td>The <code>sokopay-platform</code> folder.</td>
+</tr>
+<tr>
+<td>Git Bash</td>
+<td>Comes with Git for Windows. Used for <code>scp</code> and the packaging script.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Droplet size</strong></p>
+<table>
+<thead>
+<tr>
+<th>Use</th>
+<th>Plan</th>
+<th>Approx. monthly price</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Small test (a handful of testers)</td>
+<td>Basic Regular, 2 vCPU / 4 GB RAM / 80 GB</td>
+<td>$24</td>
+</tr>
+<tr>
+<td>Larger pilot</td>
+<td>Basic Premium, 4 vCPU / 8 GB</td>
+<td>$56</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Region:</strong> London (LON1) or Frankfurt (FRA1), the closest to Ghana. DigitalOcean has no African region.</p>
+<p><strong>Image:</strong> Ubuntu 24.04 LTS.</p>
+<hr />
+<h2>2. Create the droplet</h2>
+<ol>
+<li>DigitalOcean control panel: <strong>Create</strong>, then <strong>Droplets</strong>.</li>
+<li>Region <strong>London</strong>, image <strong>Ubuntu 24.04 (LTS) x64</strong>, size from the table above.</li>
+<li><strong>Authentication:</strong> choose <strong>SSH Key</strong>, then <strong>New SSH Key</strong>, and paste the contents of <code>C:\Users\&lt;you&gt;\.ssh\id_ed25519.pub</code>. Don't use a root password.</li>
+<li>Tick <strong>Monitoring</strong> (free CPU, memory and disk graphs and alerts). <strong>Backups</strong> are optional for a short test, because the database is also backed up by script (section 8).</li>
+<li>Hostname: <code>sokopay-test</code>, then <strong>Create Droplet</strong>. Note its <strong>public IPv4</strong>, for example <code>203.0.113.10</code>.</li>
+</ol>
+<h3>2.1 Cloud firewall</h3>
+<p><strong>Networking</strong>, then <strong>Firewalls</strong>, then <strong>Create Firewall</strong>, named <code>sokopay-test</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Inbound rule</th>
+<th>Port</th>
+<th>Sources</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH</td>
+<td>22</td>
+<td><strong>Your own IP only</strong> (look it up at https://ifconfig.me)</td>
+</tr>
+<tr>
+<td>HTTP</td>
+<td>80</td>
+<td>All IPv4 and IPv6 (needed for the certificate)</td>
+</tr>
+<tr>
+<td>HTTPS</td>
+<td>443</td>
+<td>All IPv4 and IPv6</td>
+</tr>
+</tbody>
+</table>
+<p>Leave outbound as "all". Apply the firewall to the droplet. PostgreSQL and Redis are never exposed: they only listen inside Docker's private network.</p>
+<hr />
+<h2>3. First login and server hardening</h2>
+<p>From Git Bash or PowerShell:</p>
+<pre><code class="language-bash">ssh root@203.0.113.10
+</code></pre>
+<p>On the droplet, run these as root:</p>
+<pre><code class="language-bash"># Updates and automatic security patches
+apt update &amp;&amp; apt -y upgrade
+apt -y install ufw fail2ban unattended-upgrades
+dpkg-reconfigure -f noninteractive unattended-upgrades
+
+# A non-root user for everything else
+adduser --disabled-password --gecos &quot;&quot; deploy
+usermod -aG sudo deploy
+mkdir -p /home/deploy/.ssh &amp;&amp; cp ~/.ssh/authorized_keys /home/deploy/.ssh/
+chown -R deploy:deploy /home/deploy/.ssh &amp;&amp; chmod 700 /home/deploy/.ssh
+echo &quot;deploy ALL=(ALL) NOPASSWD:ALL&quot; &gt; /etc/sudoers.d/deploy
+
+# SSH: keys only, no root login
+sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin no/; s/^#\?PasswordAuthentication .*/PasswordAuthentication no/' /etc/ssh/sshd_config
+systemctl restart ssh
+
+# Host firewall (in addition to the cloud firewall)
+ufw allow OpenSSH &amp;&amp; ufw allow 80/tcp &amp;&amp; ufw allow 443/tcp &amp;&amp; ufw --force enable
+
+# 2 GB swap (helps the image build on a 4 GB droplet)
+fallocate -l 2G /swapfile &amp;&amp; chmod 600 /swapfile &amp;&amp; mkswap /swapfile &amp;&amp; swapon /swapfile
+echo '/swapfile none swap sw 0 0' &gt;&gt; /etc/fstab
+
+# Time zone for logs
+timedatectl set-timezone Africa/Accra
+</code></pre>
+<p>Before closing the root session, open a <strong>new</strong> terminal and check you can log in as <code>deploy</code>:</p>
+<pre><code class="language-bash">ssh deploy@203.0.113.10
+</code></pre>
+<h3>3.1 Install Docker</h3>
+<p>As <code>deploy</code>:</p>
+<pre><code class="language-bash">curl -fsSL https://get.docker.com -o get-docker.sh &amp;&amp; sudo sh get-docker.sh &amp;&amp; rm get-docker.sh
+sudo usermod -aG docker deploy
+exit
+</code></pre>
+<p>Log in again so the group change applies, then check: <code>docker compose version</code>.</p>
+<hr />
+<h2>4. Domain name (DNS)</h2>
+<p><strong>With your own domain:</strong> at your DNS provider (or in DigitalOcean <strong>Networking</strong>, then <strong>Domains</strong>), add an <strong>A record</strong>. For example, <code>test.sokopay.com.gh</code> points to <code>203.0.113.10</code>. Wait until <code>ping test.sokopay.com.gh</code> shows the droplet's IP.</p>
+<p><strong>With no domain:</strong> use <code>203-0-113-10.sslip.io</code> (the droplet IP with dashes, plus <code>.sslip.io</code>). It already resolves to your droplet, and Let's Encrypt issues certificates for it. Use that name everywhere this guide says <code>test.sokopay.example</code>.</p>
+<hr />
+<h2>5. Upload the code</h2>
+<p>The repository is not on GitHub, by your instruction, so the code is copied straight from your computer.</p>
+<p><strong>On your computer</strong> (Git Bash, in the <code>sokopay-platform</code> folder):</p>
+<pre><code class="language-bash">bash deploy/scripts/package.sh
+ssh deploy@203.0.113.10 &quot;sudo mkdir -p /opt/sokopay &amp;&amp; sudo chown deploy:deploy /opt/sokopay&quot;
+scp sokopay-deploy.tgz deploy@203.0.113.10:/opt/sokopay/
+</code></pre>
+<p>The package (about 0.5 MB) contains only <code>backend/</code> and <code>deploy/</code>. It leaves out your virtual environment, local databases, <code>.env</code> files and the demo logins.</p>
+<p><strong>On the droplet:</strong></p>
+<pre><code class="language-bash">cd /opt/sokopay &amp;&amp; tar xzf sokopay-deploy.tgz &amp;&amp; rm sokopay-deploy.tgz
+ls          # backend  deploy
+</code></pre>
+<hr />
+<h2>6. The <code>.env</code> file (settings and secrets)</h2>
+<p>All configuration lives in <strong>one file on the server: <code>/opt/sokopay/deploy/.env</code></strong>. Both Docker Compose and the app containers read it.</p>
+<ul>
+<li>Never commit it, email it or paste it into chat.</li>
+<li>Its permissions are <code>600</code>, so only the <code>deploy</code> user can read it.</li>
+</ul>
+<h3>6.1 Create it and generate the secrets</h3>
+<pre><code class="language-bash">cd /opt/sokopay/deploy
+bash scripts/make-secrets.sh
+</code></pre>
+<p>This copies <code>.env.example</code> to <code>.env</code>. It then fills every <code>CHANGE_ME</code> with a strong random value and puts the same passwords into the database and Redis URLs. The values it generates:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SECRET_KEY</code></td>
+<td>Django signing key (sessions, tokens, signed links)</td>
+</tr>
+<tr>
+<td><code>FIELD_ENCRYPTION_KEY</code></td>
+<td>Encrypts Ghana Card numbers. <strong>If you lose it, that data can't be read.</strong></td>
+</tr>
+<tr>
+<td><code>POSTGRES_PASSWORD</code></td>
+<td>Database password (also in <code>DATABASE_URL</code>)</td>
+</tr>
+<tr>
+<td><code>REDIS_PASSWORD</code></td>
+<td>Redis password (also in <code>REDIS_URL</code>)</td>
+</tr>
+<tr>
+<td><code>USSD_SHARED_SECRET</code></td>
+<td>The USSD gateway must send this (section 10.4)</td>
+</tr>
+<tr>
+<td><code>RAIL_WEBHOOK_SECRET</code></td>
+<td>Signs the mock partner's callbacks</td>
+</tr>
+</tbody>
+</table>
+<h3>6.2 Fill in the domain</h3>
+<pre><code class="language-bash">nano .env
+</code></pre>
+<p>Change these five lines to your domain:</p>
+<pre><code class="language-dotenv">SOKOPAY_DOMAIN=test.sokopay.com.gh
+ACME_EMAIL=you@yourcompany.com
+ALLOWED_HOSTS=test.sokopay.com.gh,localhost,127.0.0.1
+CSRF_TRUSTED_ORIGINS=https://test.sokopay.com.gh
+QR_BASE_URL=https://test.sokopay.com.gh
+</code></pre>
+<p>Save with Ctrl+O, then exit with Ctrl+X. Check that nothing is left unfilled; the following should print nothing:</p>
+<pre><code class="language-bash">grep CHANGE_ME .env
+</code></pre>
+<h3>6.3 What the other settings mean</h3>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Pilot value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>DJANGO_SETTINGS_MODULE</code></td>
+<td><code>config.settings.staging</code></td>
+<td>Production hardening plus the mock partner. Real production uses <code>config.settings.prod</code> (section 12).</td>
+</tr>
+<tr>
+<td><code>COMPOSE_PROFILES</code></td>
+<td><code>localdb</code></td>
+<td>PostgreSQL runs in Docker on the droplet. Leave it empty if you use DigitalOcean Managed PostgreSQL (section 6.4).</td>
+</tr>
+<tr>
+<td><code>SOKOPAY_ACTIVE_LICENCE</code></td>
+<td><code>DEMI</code></td>
+<td>Every feature on, for a full test.</td>
+</tr>
+<tr>
+<td><code>RAIL_PROVIDER</code>, <code>KYC_IDENTITY_PROVIDER</code></td>
+<td><code>mock</code></td>
+<td>No real money or real identity checks.</td>
+</tr>
+<tr>
+<td><code>SMS_PROVIDER</code></td>
+<td><code>console</code></td>
+<td>Sign-in codes are written to the log (section 10.2). Set to <code>hubtel</code> with credentials for real SMS.</td>
+</tr>
+<tr>
+<td><code>PUSH_PROVIDER</code></td>
+<td><code>console</code></td>
+<td>Set to <code>fcm</code> once Firebase is configured.</td>
+</tr>
+<tr>
+<td><code>SENTRY_DSN</code></td>
+<td>empty</td>
+<td>Optional error tracking.</td>
+</tr>
+</tbody>
+</table>
+<h3>6.4 Optional: DigitalOcean Managed PostgreSQL instead</h3>
+<p>This is closer to real production, with automatic backups and failover. It costs about $15 a month extra.</p>
+<ol>
+<li><strong>Databases</strong>, then <strong>Create Database Cluster</strong>: PostgreSQL 16, same region, smallest size.</li>
+<li>Under <strong>Trusted sources</strong>, add the droplet.</li>
+<li>Copy the <strong>connection string</strong> and set it in <code>.env</code>. Keep <code>sslmode=require</code>.
+   <code>dotenv
+   COMPOSE_PROFILES=
+   DATABASE_URL=postgres://doadmin:&lt;password&gt;@&lt;host&gt;:25060/defaultdb?sslmode=require</code></li>
+<li>The <code>db</code> container then doesn't start. Backups come from DigitalOcean, and <code>scripts/backup.sh</code> isn't used.</li>
+</ol>
+<hr />
+<h2>7. Build and start</h2>
+<pre><code class="language-bash">cd /opt/sokopay/deploy
+docker compose build                      # about 5 minutes the first time
+docker compose up -d db redis             # skip &quot;db&quot; if using Managed PostgreSQL
+docker compose run --rm web python manage.py migrate --noinput
+docker compose up -d
+docker compose ps                         # web (healthy), worker, beat, db, redis, caddy: all &quot;running&quot;
+</code></pre>
+<p><strong>Check it from your computer.</strong> All three should load:</p>
+<pre><code class="language-text">https://test.sokopay.com.gh/healthz        -&gt; {&quot;status&quot;: &quot;ok&quot;, ...}
+https://test.sokopay.com.gh/readyz         -&gt; {&quot;status&quot;: &quot;ok&quot;}   (database and Redis reachable)
+https://test.sokopay.com.gh/legal/         -&gt; the legal pages, with the orange TEST ENVIRONMENT banner
+</code></pre>
+<p>The certificate appears within a minute of the first request. If it doesn't, see section 13.</p>
+<h3>7.1 Load the demo data</h3>
+<pre><code class="language-bash">docker compose run --rm web python manage.py seed_demo &gt; ~/demo-credentials.md
+chmod 600 ~/demo-credentials.md
+cat ~/demo-credentials.md
+</code></pre>
+<p>This creates the same people, shop, agents and activity as the demo guide (<code>docs/SokoPay-Demo-Guide.pdf</code>), with one difference. Because this server is on the internet, <strong>every password, PIN and 2FA secret is random</strong>, not the published demo values. The real ones exist only in <code>~/demo-credentials.md</code> on the droplet. Share them with testers through a password manager, never in chat.</p>
+<p>The shop's merchant code is still <strong>GRACEMTN</strong>.</p>
+<hr />
+<h2>8. Daily operations during the test</h2>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Command (in <code>/opt/sokopay/deploy</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Status</td>
+<td><code>docker compose ps</code></td>
+</tr>
+<tr>
+<td>Live logs (all)</td>
+<td><code>docker compose logs -f --tail 100</code></td>
+</tr>
+<tr>
+<td>Web or API logs only</td>
+<td><code>docker compose logs -f web</code></td>
+</tr>
+<tr>
+<td>Restart everything</td>
+<td><code>docker compose restart</code></td>
+</tr>
+<tr>
+<td>Stop / start</td>
+<td><code>docker compose stop</code> / <code>docker compose up -d</code></td>
+</tr>
+<tr>
+<td>Django shell</td>
+<td><code>docker compose run --rm web python manage.py shell</code></td>
+</tr>
+<tr>
+<td>Back up the database now</td>
+<td><code>bash scripts/backup.sh</code> (keeps the last 14 in <code>deploy/backups/</code>)</td>
+</tr>
+<tr>
+<td>Nightly backups at 02:00</td>
+<td><code>(crontab -l; echo "0 2 * * * cd /opt/sokopay/deploy &amp;&amp; bash scripts/backup.sh") \| crontab -</code></td>
+</tr>
+<tr>
+<td>Disk space</td>
+<td><code>df -h</code> and <code>docker system df</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Health:</strong></p>
+<ul>
+<li>The staff portal's <strong>Health</strong> page shows stuck payouts, failed payments, overdue disputes and safeguarding.</li>
+<li>DigitalOcean <strong>Monitoring</strong>, then <strong>Create alert</strong>: CPU above 80%, memory above 85%, disk above 80%.</li>
+</ul>
+<p><strong>Restore a backup</strong> (for example, after a bad test step):</p>
+<pre><code class="language-bash">docker compose stop web worker beat
+docker compose exec -T db dropdb -U sokopay sokopay
+docker compose exec -T db createdb -U sokopay sokopay
+docker compose exec -T db pg_restore -U sokopay -d sokopay --no-owner &lt; backups/&lt;file&gt;.dump
+docker compose up -d
+docker compose run --rm web python manage.py db_fingerprint      # ledger sums to zero, no integrity breaks
+</code></pre>
+<hr />
+<h2>9. Updating to a new version</h2>
+<p>On your computer:</p>
+<pre><code class="language-bash">bash deploy/scripts/package.sh
+scp sokopay-deploy.tgz deploy@203.0.113.10:/opt/sokopay/
+</code></pre>
+<p>On the droplet:</p>
+<pre><code class="language-bash">cd /opt/sokopay &amp;&amp; tar xzf sokopay-deploy.tgz &amp;&amp; rm sokopay-deploy.tgz
+cd deploy &amp;&amp; bash scripts/update.sh
+</code></pre>
+<p><code>update.sh</code> backs up the database, rebuilds the image, runs migrations, restarts and checks <code>/readyz</code>. <strong>Your <code>.env</code> is not touched</strong>, because the package never contains it.</p>
+<hr />
+<h2>10. Testing with the apps and portals</h2>
+<h3>10.1 Phone apps pointed at the server</h3>
+<p>On your computer, build the APKs with the server's address. Because the server has a real HTTPS certificate, the apps work on <strong>real phones</strong>, not just the emulator.</p>
+<pre><code class="language-bash">API_BASE_URL=https://test.sokopay.com.gh/api/v1 bash mobile/scripts/build_apks.sh
+</code></pre>
+<p>The APKs land in <code>mobile/dist/</code>. Send them to testers, who open them on Android and allow installation. They're debug-signed and for testing only.</p>
+<h3>10.2 Sign-in codes</h3>
+<p>With <code>SMS_PROVIDER=console</code>, no SMS is sent. Find a tester's code on the droplet:</p>
+<pre><code class="language-bash">docker compose logs web | grep &quot;SMS:console&quot; | tail -5
+</code></pre>
+<p>For a pilot with real SMS, set <code>SMS_PROVIDER=hubtel</code> plus <code>HUBTEL_CLIENT_ID</code>, <code>HUBTEL_CLIENT_SECRET</code> and <code>SMS_SENDER_ID</code> in <code>.env</code>, then <code>docker compose up -d</code>.</p>
+<h3>10.3 Portals</h3>
+<ul>
+<li><strong>Address:</strong> <code>https://test.sokopay.com.gh/dashboard/</code>. Sign in with the phone and password from <code>demo-credentials.md</code>.</li>
+<li><strong>2FA:</strong> add the account's 2FA secret to an authenticator app, or print the current code:
+  <code>bash
+  docker compose run --rm web python manage.py demo_2fa_code +233200000004</code></li>
+<li><strong>Mock partner:</strong> <code>https://test.sokopay.com.gh/dev/mock-partner/</code> approves MoMo prompts and payouts (demo guide, section 11). On the server it needs the <strong>superuser</strong> (Abena Admin) signed in with 2FA.</li>
+</ul>
+<h3>10.4 USSD</h3>
+<p>USSD test calls must include the secret from <code>.env</code> (<code>grep USSD_SHARED_SECRET .env</code>):</p>
+<pre><code class="language-bash">curl -s -X POST &quot;https://test.sokopay.com.gh/api/v1/ussd/callback?key=&lt;USSD_SHARED_SECRET&gt;&quot; \
+  --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
+</code></pre>
+<p>A real USSD aggregator is given the same URL and secret.</p>
+<h3>10.5 Following the demo guide</h3>
+<p>Every walkthrough in <code>docs/SokoPay-Demo-Guide.pdf</code> works on the server with these changes:</p>
+<ul>
+<li>Use <code>https://test.sokopay.com.gh</code> instead of <code>http://127.0.0.1:8000</code>.</li>
+<li>Use the logins from <code>demo-credentials.md</code>.</li>
+<li>Read sign-in codes from <code>docker compose logs web</code>.</li>
+</ul>
+<hr />
+<h2>11. After the test: wipe everything</h2>
+<p>When testing is complete and nothing needs to be kept:</p>
+<ol>
+<li><strong>(Optional) keep evidence:</strong> export what you need from the portal first, such as the audit log CSV, regulatory figures and statements. Copy them to your computer:
+   <code>bash
+   scp deploy@203.0.113.10:/opt/sokopay/deploy/backups/&lt;latest&gt;.dump .</code>
+   Only keep a copy if you need it; it contains the test data.</li>
+<li><strong>Wipe the data on the server:</strong>
+   <code>bash
+   cd /opt/sokopay/deploy &amp;&amp; bash scripts/wipe.sh</code>
+   Type <code>WIPE</code> to confirm. This deletes:
+   - the PostgreSQL and Redis data, certificates, backups and nightly backup job;
+   - <code>.env</code>, including every secret;
+   - the built images.</li>
+<li><strong>Delete the cloud resources</strong> in the DigitalOcean control panel:
+   - <strong>Droplets</strong>, then <code>sokopay-test</code>, then <strong>Destroy</strong>. This erases the disk.
+   - <strong>Backups and Snapshots:</strong> delete any droplet backups or snapshots.
+   - <strong>Databases:</strong> delete the managed cluster, if you used one.
+   - <strong>Networking:</strong> delete the <code>sokopay-test</code> firewall and any DNS records you added.
+   - <strong>Monitoring:</strong> delete the alert policies.</li>
+<li><strong>On your computer:</strong> delete <code>demo-credentials.md</code> and any downloaded dumps. Uninstall the test APKs from testers' phones.</li>
+<li><strong>If any real credentials were used</strong> (Hubtel, Firebase, Sentry), rotate or revoke them at the provider.</li>
+</ol>
+<p>After step 3 nothing of the test remains at DigitalOcean.</p>
+<hr />
+<h2>12. Moving to real production later</h2>
+<p>The pilot proves the platform. Real production differs in five ways:</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Pilot (this guide)</th>
+<th>Production</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Settings</td>
+<td><code>config.settings.staging</code> (mock partner allowed)</td>
+<td><code>config.settings.prod</code>: refuses to start with any mock, and needs a configured and certified Korba or Nsano (<code>docs/RAILS-INTEGRATION.md</code>)</td>
+</tr>
+<tr>
+<td>Data location</td>
+<td>DigitalOcean London or Frankfurt</td>
+<td>Hosting approved by the Bank of Ghana and the Data Protection Commission (in Ghana, or AWS Cape Town per <code>infra/</code> if approved)</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>PostgreSQL on the droplet</td>
+<td>Managed PostgreSQL with automatic failover, point-in-time recovery, and a restore drill (<code>docs/ENGINEERING-OPERATIONS.md</code>)</td>
+</tr>
+<tr>
+<td>Servers</td>
+<td>One droplet</td>
+<td>At least two app servers behind a load balancer, separate worker, monitoring alarms (<code>infra/monitoring.tf</code>)</td>
+</tr>
+<tr>
+<td>Data</td>
+<td>Demo only</td>
+<td>Real customers, so the legal documents must be signed off first (<code>docs/legal</code>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>13. Troubleshooting</h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>https://…</code> shows a certificate error</td>
+<td>DNS must point at the droplet, and ports 80 and 443 must be open in both firewalls. See <code>docker compose logs caddy</code>.</td>
+</tr>
+<tr>
+<td><code>Bad Request (400)</code></td>
+<td>The domain is missing from <code>ALLOWED_HOSTS</code> in <code>.env</code>. Restart with <code>docker compose up -d</code>.</td>
+</tr>
+<tr>
+<td><code>CSRF verification failed</code> on portal forms</td>
+<td><code>CSRF_TRUSTED_ORIGINS</code> must be <code>https://&lt;your domain&gt;</code>.</td>
+</tr>
+<tr>
+<td><code>web</code> keeps restarting</td>
+<td><code>docker compose logs web</code>. Usually a missing <code>.env</code> value (<code>FIELD_ENCRYPTION_KEY</code>, <code>SECRET_KEY</code>) or a wrong <code>DATABASE_URL</code>.</td>
+</tr>
+<tr>
+<td><code>readyz</code> says unavailable</td>
+<td>The database or Redis isn't reachable: <code>docker compose ps</code>, then <code>docker compose logs db redis</code>.</td>
+</tr>
+<tr>
+<td>Image build runs out of memory</td>
+<td>Make sure the 2 GB swap from section 3 is on (<code>swapon --show</code>), or use the 8 GB droplet.</td>
+</tr>
+<tr>
+<td>Apps can't connect</td>
+<td>The APK must be built with <code>API_BASE_URL=https://&lt;domain&gt;/api/v1</code>. Plain <code>http://</code> addresses are blocked except the local emulator address.</td>
+</tr>
+<tr>
+<td>A MoMo payment stays "pending"</td>
+<td>Approve it on <code>/dev/mock-partner/</code> as the superuser.</td>
+</tr>
+<tr>
+<td>"Demo data is already loaded"</td>
+<td>The seed only runs on an empty database. Wipe and start again (section 11, steps 1–2, then section 7).</td>
+</tr>
+</tbody>
+</table></body></html>

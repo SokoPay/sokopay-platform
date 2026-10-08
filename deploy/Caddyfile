@@ -1,0 +1,29 @@
+# HTTPS for SokoPay. Caddy gets and renews a Let's Encrypt certificate for SOKOPAY_DOMAIN
+# automatically (the domain's DNS must point at this server, and ports 80/443 must be open).
+{
+	email {$ACME_EMAIL}
+}
+
+{$SOKOPAY_DOMAIN} {
+	encode zstd gzip
+
+	# Uploads (bulk payout files, selfies) are small; refuse anything big.
+	request_body {
+		max_size 10MB
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+	}
+
+	reverse_proxy web:8000 {
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

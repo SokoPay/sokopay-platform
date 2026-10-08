@@ -1,0 +1,27 @@
+name: sokopay_shared
+description: Shared SokoPay mobile code — theme, brand, token storage, API client,
+  phone/OTP/PIN auth, app lock and inbox. Used by the customer, agent and Business apps.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.35.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.7.0
+  flutter_secure_storage: ^9.2.2
+  provider: ^6.1.2
+  go_router: ^14.6.2
+  local_auth: ^2.3.0             # fingerprint / Face ID app unlock
+  url_launcher: ^6.3.1           # open statement PDFs (single-use links) in the browser
+  intl: ^0.19.0                  # dates on the statement screen
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+
+flutter:
+  assets:
+    - assets/brand/

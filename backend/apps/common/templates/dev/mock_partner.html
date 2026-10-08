@@ -1,0 +1,23 @@
+{% extends "checkout/base.html" %}
+{% load money_tags %}
+{% block title %}Mock partner (dev) · SokoPay{% endblock %}
+{% block content %}
+<div class="bg-amber-100 text-amber-900 rounded-md p-3 text-sm mb-4"><b>Development only.</b> Plays the customer's phone and the payment partner. This page doesn't exist in production.</div>
+{% if messages %}{% for m in messages %}<div class="mb-3 text-sm {% if m.tags == 'error' %}text-danger{% else %}text-success{% endif %}">{{ m }}</div>{% endfor %}{% endif %}
+<h2 class="font-semibold mt-2 mb-2">MoMo prompts waiting for the customer</h2>
+{% for p in payments %}<div class="bg-surface rounded-lg shadow-sm p-3 mb-2 text-sm flex items-center gap-2"><div class="flex-1"><span class="font-mono">{{ p.reference }}</span> · {{ p.amount_minor|ghs }} · {{ p.get_purpose_display }}{% if p.merchant %} to {{ p.merchant.trading_name|default:p.merchant.legal_name }}{% endif %} · from {{ p.payer_masked }}</div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="kind" value="payment"><input type="hidden" name="id" value="{{ p.pk }}"><button name="outcome" value="approve" class="bg-success text-white rounded px-3 py-1">Approve</button> <button name="outcome" value="decline" class="border border-danger text-danger rounded px-3 py-1">Decline</button></form></div>
+{% empty %}<p class="text-sm text-ink/40 mb-2">None.</p>{% endfor %}
+<h2 class="font-semibold mt-4 mb-2">Settlement payouts at the partner</h2>
+{% for s in settlements %}<div class="bg-surface rounded-lg shadow-sm p-3 mb-2 text-sm flex items-center gap-2"><div class="flex-1">{{ s.merchant.trading_name|default:s.merchant.legal_name }} · {{ s.amount_minor|ghs }}</div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="kind" value="settlement"><input type="hidden" name="id" value="{{ s.pk }}"><button name="outcome" value="approve" class="bg-success text-white rounded px-3 py-1">Paid</button> <button name="outcome" value="decline" class="border border-danger text-danger rounded px-3 py-1">Refused</button></form></div>
+{% empty %}<p class="text-sm text-ink/40 mb-2">None.</p>{% endfor %}
+<h2 class="font-semibold mt-4 mb-2">MoMo refunds at the partner</h2>
+{% for r in refunds %}<div class="bg-surface rounded-lg shadow-sm p-3 mb-2 text-sm flex items-center gap-2"><div class="flex-1">{{ r.payment.reference }} · {{ r.amount_minor|ghs }}</div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="kind" value="refund"><input type="hidden" name="id" value="{{ r.pk }}"><button name="outcome" value="approve" class="bg-success text-white rounded px-3 py-1">Paid</button> <button name="outcome" value="decline" class="border border-danger text-danger rounded px-3 py-1">Refused</button></form></div>
+{% empty %}<p class="text-sm text-ink/40 mb-2">None.</p>{% endfor %}
+<h2 class="font-semibold mt-4 mb-2">Cross-border sends</h2>
+{% for t in transfers %}<div class="bg-surface rounded-lg shadow-sm p-3 mb-2 text-sm flex items-center gap-2"><div class="flex-1"><span class="font-mono">{{ t.reference }}</span> · {{ t.receive_amount }} {{ t.receive_currency }} to {{ t.recipient_name }}</div>
+  <form method="post">{% csrf_token %}<input type="hidden" name="kind" value="cross_border"><input type="hidden" name="id" value="{{ t.pk }}"><button name="outcome" value="approve" class="bg-success text-white rounded px-3 py-1">Delivered</button> <button name="outcome" value="decline" class="border border-danger text-danger rounded px-3 py-1">Refused</button></form></div>
+{% empty %}<p class="text-sm text-ink/40 mb-2">None.</p>{% endfor %}
+{% endblock %}

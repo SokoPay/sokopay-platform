@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Regulatory return · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Monthly regulatory figures</h1>
+<p class="text-sm text-ink/60 mb-4">Figures for {{ month }} from SokoPay's own records. Map them onto the current Bank of Ghana return template before filing; nothing is submitted from here. Amounts ending <code>_minor</code> are in pesewas.</p>
+<form method="get" class="flex flex-wrap gap-2 mb-4 text-sm">
+  <input type="month" name="month" value="{{ month }}" class="border border-gray-200 rounded-md px-3 py-2">
+  <button class="border border-ink/20 rounded-md px-4 py-2">Show</button>
+  <button name="format" value="csv" class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Download CSV</button>
+</form>
+{% if report.e_money.safeguarding_status != 'ok' %}<div class="bg-red-50 text-danger rounded-md p-3 text-sm mb-4">Safeguarding at month end: {{ report.e_money.safeguarding_status }}. Resolve before filing.</div>{% endif %}
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Section</th><th>Metric</th><th class="text-right px-4">Value</th></tr></thead>
+  <tbody>{% for section, metric, value in rows %}<tr class="border-t border-gray-50"><td class="px-4 py-1 text-ink/50">{% ifchanged section %}{{ section }}{% endifchanged %}</td><td class="font-mono text-xs">{{ metric }}</td><td class="text-right px-4 tabular-nums">{{ value|default_if_none:"—" }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Dispute · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:ops_disputes' %}" class="text-sm text-ink/60 hover:text-orange">← Disputes</a>
+<h1 class="text-xl font-semibold mt-2">{{ d.get_reason_display }} · {{ d.amount_minor|ghs }}</h1>
+<div class="text-sm text-ink/60 mb-4">{{ d.get_status_display }} · payment <span class="font-mono">{{ d.payment.reference }}</span> of {{ d.payment.amount_minor|ghs }} on {{ d.payment.completed_at|date:"d M Y H:i" }} by {% if d.payment.funding_source == 'wallet' %}wallet{% else %}{{ d.payment.network|upper }}{% endif %}</div>
+<div class="grid md:grid-cols-2 gap-4 text-sm">
+  <div class="bg-surface rounded-lg shadow-sm p-4"><h2 class="font-medium mb-1">Customer · {{ d.customer.full_name|default:d.customer.phone }}</h2><p>“{{ d.description }}”</p>
+    <p class="text-xs text-ink/50 mt-2">{{ other_disputes }} other dispute{{ other_disputes|pluralize }} by this customer.</p></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><h2 class="font-medium mb-1">Merchant · {{ d.merchant.trading_name|default:d.merchant.legal_name }}</h2>
+    {% if d.merchant_response %}<p>“{{ d.merchant_response }}”</p><p class="text-xs text-ink/50 mt-2">{{ d.responded_by.full_name }}, {{ d.responded_at|date:"d M Y H:i" }}</p>{% else %}<p class="text-ink/40">No answer. Deadline was {{ d.respond_by|date:"d M Y H:i" }}.</p>{% endif %}</div>
+</div>
+{% if d.is_active %}
+<form method="post" class="bg-surface rounded-lg shadow-sm p-4 mt-4 text-sm space-y-2">{% csrf_token %}
+  <textarea name="note" required rows="3" placeholder="Reason for the decision (kept on file; shown to both sides)" class="w-full border border-gray-200 rounded-md px-3 py-2"></textarea>
+  <div class="flex gap-2"><button name="decision" value="customer" class="bg-orange text-white rounded-md px-4 py-2" onclick="return confirm('Refund {{ d.amount_minor|ghs }} from the merchant balance?')">Customer is right: refund</button>
+    <button name="decision" value="merchant" class="border border-ink/20 rounded-md px-4 py-2">Merchant is right: close</button></div>
+</form>
+{% else %}<div class="bg-surface rounded-lg shadow-sm p-4 mt-4 text-sm">Decision: {{ d.decision_note }} <span class="text-xs text-ink/50">{{ d.decided_by.full_name }} {{ d.decided_at|date:"d M Y H:i" }}</span></div>{% endif %}
+<h2 class="font-medium mt-6 mb-2">Refunds on this payment</h2>
+<div class="bg-surface rounded-lg shadow-sm"><table class="w-full text-sm"><tbody>{% for r in refunds %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ r.created_at|date:"d M H:i" }}</td><td>{{ r.amount_minor|ghs }}</td><td>{{ r.get_status_display }}</td><td class="text-xs">{{ r.reason }}</td></tr>{% empty %}<tr><td class="px-4 py-3 text-ink/40">None.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

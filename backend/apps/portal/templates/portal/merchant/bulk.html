@@ -1,0 +1,77 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Bulk payments · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Bulk payments</h1>
+<p class="text-sm text-ink/60 mb-4">Pay staff or suppliers in one go from your SokoPay balance — to SokoPay wallets, mobile money, banks or other fintech wallets.</p>
+
+{% if not licensed %}
+<div class="bg-amber-100 text-warning rounded-md px-4 py-3 text-sm mb-4">
+  Bulk payments switch on once SokoPay's PSP Medium licence is active. You can prepare files now using the templates below.
+</div>
+{% endif %}
+
+<div class="grid md:grid-cols-3 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-5 md:col-span-2">
+    <h2 class="font-medium mb-1">Upload a payment file</h2>
+    <p class="text-sm text-ink/60 mb-3">CSV or Excel (.xlsx), up to {{ max_mb }} MB / 5,000 rows. Nothing is paid until an Owner or Finance user approves.</p>
+    {% if can_upload %}
+    <form method="post" enctype="multipart/form-data" hx-boost="false" class="space-y-3">
+      {% csrf_token %}
+      <input type="file" name="file" required accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+             class="block w-full text-sm file:mr-3 file:px-3 file:py-2 file:rounded-md file:border-0 file:bg-ink file:text-white">
+      <input name="note" maxlength="120" placeholder="What is this? e.g. October salaries"
+             class="w-full border border-gray-200 rounded-md px-3 py-2 text-sm">
+      <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2 text-sm">Upload and review</button>
+    </form>
+    {% else %}
+    <p class="text-sm text-warning">Your role ({{ request.merchant_role }}) cannot upload payments. Ask an Owner, Admin or Finance user.</p>
+    {% endif %}
+  </div>
+
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <h2 class="font-medium mb-1">Templates</h2>
+    <p class="text-sm text-ink/60 mb-3">Start from a sample file. Keep the headers; one recipient per row.</p>
+    <div class="flex flex-col gap-2 text-sm">
+      <a href="{% url 'portal:bulk_sample' 'csv' %}" hx-boost="false" class="border border-ink/20 hover:border-orange rounded-md px-3 py-2 text-center">Download sample .csv</a>
+      <a href="{% url 'portal:bulk_sample' 'xlsx' %}" hx-boost="false" class="border border-ink/20 hover:border-orange rounded-md px-3 py-2 text-center">Download sample .xlsx</a>
+    </div>
+    <dl class="text-xs text-ink/60 mt-4 space-y-1">
+      <div><dt class="inline font-medium text-ink">name</dt> — recipient's name</div>
+      <div><dt class="inline font-medium text-ink">destination_type</dt> — sokopay · momo · bank · wallet</div>
+      <div><dt class="inline font-medium text-ink">institution</dt> — mtn / telecel / at, bank code, or gmoney / zeepay</div>
+      <div><dt class="inline font-medium text-ink">account</dt> — phone (0241234567) or bank account number</div>
+      <div><dt class="inline font-medium text-ink">amount</dt> — cedis, e.g. 850.00</div>
+      <div><dt class="inline font-medium text-ink">narrative</dt> — optional note the recipient sees</div>
+    </dl>
+    <p class="text-xs text-ink/40 mt-3">Fees: SokoPay wallets free; other destinations 0.75% (min GH₵0.50) per recipient. Available balance: {{ available_display }}.</p>
+  </div>
+</div>
+
+{% if awaiting_me %}
+<div class="mt-6 bg-blue-50 text-blue-800 rounded-md px-4 py-3 text-sm">{{ awaiting_me }} batch{{ awaiting_me|pluralize:"es" }} awaiting your approval.</div>
+{% endif %}
+
+<h2 class="font-medium mt-8 mb-3">Batches</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">When</th><th>Batch</th><th class="text-right">Recipients</th><th class="text-right px-5">Total</th><th class="px-5">Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for b in batches %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ b.created_at|date:"d M, H:i" }}</td>
+        <td>{{ b.note|default:b.source_filename }}<div class="text-xs text-ink/40">by {{ b.created_by.full_name|default:b.created_by.phone }}</div></td>
+        <td class="text-right tabular-nums">{{ b.valid_count }}{% if b.invalid_count %} <span class="text-warning">(+{{ b.invalid_count }} invalid)</span>{% endif %}</td>
+        <td class="text-right px-5 tabular-nums">{{ b.needed_minor|ghs }}</td>
+        <td class="px-5">{% include "portal/_status_pill.html" with status=b.status %}</td>
+        <td class="px-5 text-right"><a href="{% url 'portal:bulk_detail' b.pk %}" class="text-orange">Open</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="6" class="px-5 py-8 text-center text-ink/40">No bulk payments yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

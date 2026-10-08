@@ -1,0 +1,49 @@
+{% extends "portal/base.html" %}
+{% block title %}Security · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Security</h1>
+
+<div class="grid md:grid-cols-2 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">Two-factor authentication</h2>
+    {% if enrolled %}
+      <p class="mb-1"><span class="text-success font-medium">On.</span> You're asked for a code from your authenticator app at each sign-in.</p>
+      <p class="text-ink/60">Backup codes left: <strong>{{ codes_left }}</strong> of 10.</p>
+      {% if role_requires %}<p class="text-xs text-ink/40 mt-2">Required for your role.</p>{% endif %}
+    {% else %}
+      <p class="mb-3 text-warning">Off. Turn it on to protect your account even if your password leaks.</p>
+      <a href="{% url 'portal:twofa' %}" class="inline-block bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Set up 2FA</a>
+    {% endif %}
+  </div>
+
+  {% if enrolled %}
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">New backup codes</h2>
+    <p class="text-ink/60 mb-3">Creates 10 new one-time codes and cancels the old ones. Enter a current code from your app to confirm it's you.</p>
+    <form method="post" class="flex gap-2">
+      {% csrf_token %}<input type="hidden" name="action" value="regenerate">
+      <input name="token" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" required
+             class="w-32 text-center tracking-widest border border-gray-200 rounded-md px-3 py-2">
+      <button class="border border-ink/20 hover:border-orange rounded-md px-4 py-2">Create new codes</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+<h2 class="font-medium mt-8 mb-3">Recent security activity</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <tbody>
+      {% for e in events %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2 text-ink/60">{{ e.created_at|date:"d M Y, H:i" }}</td>
+        <td>{{ e.get_kind_display }}{% if e.actor and e.actor != user %} <span class="text-ink/50">by SokoPay staff</span>{% endif %}</td>
+        <td class="px-5 text-ink/40 font-mono text-xs">{{ e.ip|default:"" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td class="px-5 py-6 text-center text-ink/40">Nothing yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Float approvals · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Float top-up approvals</h1>
+<p class="text-sm text-ink/60 mb-4">Check the agent's payment has actually arrived in SokoPay's account before approving. You can't approve a top-up you recorded.</p>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto mb-6"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Recorded</th><th>Agent</th><th class="text-right">Amount</th><th>Payment ref</th><th>By</th><th class="px-4"></th></tr></thead>
+  <tbody>{% for t in pending %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ t.created_at|date:"d M H:i" }}</td><td>{{ t.agent.display_name }}</td><td class="text-right tabular-nums">{{ t.amount_minor|ghs }}</td><td class="font-mono text-xs">{{ t.payment_reference }}</td><td>{{ t.requested_by.full_name }}</td>
+    <td class="px-4"><form method="post" class="flex gap-2 justify-end">{% csrf_token %}<input type="hidden" name="topup" value="{{ t.pk }}"><input name="note" placeholder="Note" class="border border-gray-200 rounded-md px-2 py-1 w-32">
+      <button name="decision" value="approve" class="bg-success text-white rounded-md px-3 py-1">Approve</button><button name="decision" value="reject" class="border border-danger text-danger rounded-md px-3 py-1">Reject</button></form></td></tr>
+  {% empty %}<tr><td colspan="6" class="px-4 py-8 text-center text-ink/40">Nothing waiting.</td></tr>{% endfor %}</tbody></table></div>
+<h2 class="font-medium mb-2">Recently decided</h2>
+<div class="bg-surface rounded-lg shadow-sm"><table class="w-full text-sm"><tbody>{% for t in recent %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ t.decided_at|date:"d M H:i" }}</td><td>{{ t.agent.display_name }}</td><td class="tabular-nums">{{ t.amount_minor|ghs }}</td><td>{{ t.get_status_display }}</td><td class="text-xs text-ink/50">{{ t.requested_by.full_name }} → {{ t.decided_by.full_name }}</td></tr>{% empty %}<tr><td class="px-4 py-4 text-ink/40">None yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

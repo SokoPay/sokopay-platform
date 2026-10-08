@@ -1,0 +1,85 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ m.legal_name }} · Review{% endblock %}
+{% block content %}
+<a href="{% url 'portal:merchant_queue' %}" class="text-sm text-orange">← Back to queue</a>
+<h1 class="text-xl font-semibold mt-2 mb-1">{{ m.trading_name|default:m.legal_name }}</h1>
+<p class="text-sm text-ink/60 mb-6">
+  {% include "portal/_status_pill.html" with status=m.status %}
+  · {{ m.get_business_type_display }}
+</p>
+
+<div class="grid md:grid-cols-2 gap-4 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-1">
+    <h2 class="font-medium mb-2">Business details</h2>
+    <div><span class="text-ink/50">Legal name:</span> {{ m.legal_name }}</div>
+    <div><span class="text-ink/50">TIN:</span> {{ m.tin|default:"—" }}</div>
+    <div><span class="text-ink/50">Registration:</span> {{ m.registration_no|default:"—" }}</div>
+    <div><span class="text-ink/50">Category:</span> {{ m.category|default:"—" }}</div>
+    <div><span class="text-ink/50">Owner:</span> {{ m.owner.full_name|default:m.owner.phone }}</div>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">Documents</h2>
+    <ul class="divide-y divide-gray-50">
+      {% for d in documents %}
+      <li class="py-2 flex justify-between">
+        <span>{{ d.get_kind_display }}</span>
+        <span>{% include "portal/_status_pill.html" with status=d.status %}</span>
+      </li>
+      {% empty %}<li class="py-2 text-ink/40">No documents uploaded.</li>{% endfor %}
+    </ul>
+  </div>
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm p-5 mb-6 text-sm">
+  <h2 class="font-medium mb-2">Team</h2>
+  <ul class="divide-y divide-gray-50">
+    {% for mem in members %}
+    <li class="py-2 flex flex-wrap items-center justify-between gap-2">
+      <span>{{ mem.user.full_name|default:mem.user.phone }} · {{ mem.get_role_display }}
+        · 2FA {% if mem.has_2fa %}<span class="text-success">on</span>{% else %}<span class="text-warning">not set up</span>{% endif %}</span>
+      {% if mem.has_2fa %}
+      <form method="post" class="flex items-center gap-2">{% csrf_token %}
+        <input type="hidden" name="action" value="reset_2fa"><input type="hidden" name="member" value="{{ mem.pk }}">
+        <button class="text-danger border border-danger/40 rounded-md px-3 py-1"
+                onclick="return confirm('Reset 2FA for {{ mem.user.phone }}? Only do this after verifying their identity by call-back on the registered number.')">Reset 2FA</button>
+      </form>
+      {% endif %}
+    </li>
+    {% empty %}<li class="py-2 text-ink/40">No members.</li>{% endfor %}
+  </ul>
+  <p class="text-xs text-ink/40 mt-2">Reset only after verifying the person (call-back on the registered number). Every reset is logged with your name.</p>
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm p-5">
+  <h2 class="font-medium mb-3">Decision</h2>
+  {% if m.status == 'submitted' %}
+    <form method="post">{% csrf_token %}
+      <button name="action" value="begin_review"
+              class="bg-ink text-white rounded-md px-4 py-2 text-sm">Begin review</button>
+    </form>
+  {% elif m.status == 'in_review' %}
+    <div class="flex flex-wrap gap-6">
+      <form method="post" class="flex items-end gap-2">{% csrf_token %}
+        <label class="text-sm">Risk tier
+          <select name="risk_tier" class="block border border-gray-200 rounded-md px-3 py-2 mt-1">
+            <option value="low">Low</option><option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+        <button name="action" value="approve"
+                class="bg-success text-white rounded-md px-4 py-2 text-sm">Approve</button>
+      </form>
+      <form method="post" class="flex items-end gap-2">{% csrf_token %}
+        <label class="text-sm">Reason
+          <input name="reason" class="block border border-gray-200 rounded-md px-3 py-2 mt-1">
+        </label>
+        <button name="action" value="reject"
+                class="bg-danger text-white rounded-md px-4 py-2 text-sm">Reject</button>
+      </form>
+    </div>
+  {% else %}
+    <p class="text-sm text-ink/60">No action available in status “{{ m.get_status_display }}”.
+      {% if m.rejection_reason %}<br>Reason on file: {{ m.rejection_reason }}{% endif %}</p>
+  {% endif %}
+</div>
+{% endblock %}

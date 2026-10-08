@@ -1,0 +1,48 @@
+# SokoPay backend dependencies.
+# Versions are pinned for reproducible, auditable builds (a BoG expectation).
+# Review and bump deliberately; run `pip-audit` in CI to catch known CVEs.
+
+# --- Core framework ---
+Django==5.1.6                     # LTS-track; actively supported (old repo was on EOL 2.2)
+djangorestframework==3.15.2       # REST API for the mobile apps and merchant API
+psycopg[binary]==3.2.4            # PostgreSQL driver (psycopg 3)
+
+# --- Security ---
+argon2-cffi==23.1.0               # Argon2 password hashing (stronger than Django default)
+cryptography==44.0.0              # field-level encryption for PII (Ghana Card, account numbers)
+PyJWT==2.10.1                     # signed tokens for mobile app sessions
+django-otp==1.5.4                 # TOTP 2FA for staff and merchant portals
+segno==1.6.1                      # pure-Python QR codes for 2FA enrolment (no binary deps)
+
+# --- Async work & caching ---
+celery==5.4.0                     # settlement runs, webhook delivery, reconciliation jobs
+redis==5.2.1                      # cache, rate limiting, OTP store, Celery broker (dev)
+
+# --- API quality ---
+drf-spectacular==0.28.0           # OpenAPI 3.1 schema + docs for the merchant API
+django-cors-headers==4.6.0        # controlled CORS (old repo allowed all origins)
+django-filter==24.3               # safe, declarative list filtering
+
+# --- Frontend (server-rendered portals) ---
+django-htmx==1.21.0               # HTMX helpers for merchant/admin portals
+whitenoise==6.8.2                 # static file serving
+
+# --- Config & ops ---
+django-environ==0.12.0            # 12-factor settings from environment variables
+gunicorn==23.0.0                  # WSGI server
+sentry-sdk==2.20.0                # error monitoring
+google-auth==2.38.0               # OAuth2 for Firebase Cloud Messaging (push)
+openpyxl==3.1.5                   # read merchant bulk-payment spreadsheets (.xlsx)
+defusedxml==0.7.1                 # safe XML parsing (sanctions list imports)
+requests==2.34.2                  # outbound HTTP (rails, merchant webhooks); was only a transitive dep
+markdown==3.7                     # renders the legal pages (docs/legal) for the apps and portal
+
+# --- Testing & quality (also used in CI) ---
+pytest==8.3.4
+pytest-django==4.9.0
+pytest-cov==6.0.0
+hypothesis==6.123.17              # property-based tests for ledger invariants
+factory-boy==3.3.1
+ruff==0.9.3                       # linter + formatter
+pip-audit==2.7.3                  # dependency vulnerability scan
+bandit==1.8.2                     # security static analysis

@@ -1,0 +1,78 @@
+# ---------------------------------------------------------------------------
+# SokoPay .gitignore
+# Lesson from the old repository: NEVER commit secrets, keys or databases.
+# If any of these ever appear in a diff, stop and remove them before committing.
+# ---------------------------------------------------------------------------
+
+# Secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+vault/
+
+# Databases and dumps
+*.sqlite3
+*.db
+*.dump
+*.sql
+latest.dump
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Django
+staticfiles/
+mediafiles/
+media/
+
+# Flutter / Dart
+mobile/**/.dart_tool/
+mobile/**/build/
+mobile/**/.flutter-plugins
+mobile/**/.flutter-plugins-dependencies
+*.g.dart
+*.freezed.dart
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Demo database and its printed logins (scripts/demo.ps1)
+backend/demo-credentials.md
+
+# Built apps and signing keys (APKs are built by CI or locally; keystores never in git)
+mobile/dist/*.apk
+*.aab
+*.jks
+*.keystore
+key.properties
+
+# Terraform state and local settings (the .terraform.lock.hcl IS committed)
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+
+# Deployment artefacts
+deploy/backups/
+sokopay-deploy.tgz

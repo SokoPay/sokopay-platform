@@ -1,0 +1,27 @@
+# Copy to terraform.tfvars and fill in. Do NOT commit terraform.tfvars.
+
+environment     = "production"
+region          = "af-south-1"
+allowed_hosts   = "api.sokopay.com.gh,app.sokopay.com.gh"
+active_licence  = "PSP_STANDARD"          # raise only when BoG grants the next licence
+rail_provider   = "korba"                 # or "nsano"
+sms_provider    = "hubtel"
+
+# After the first apply creates the ECR repo, build & push the backend image and set:
+container_image = "<account>.dkr.ecr.af-south-1.amazonaws.com/sokopay-production-backend:<tag>"
+
+# ACM certificate (in af-south-1) for the ALB HTTPS listener:
+acm_certificate_arn = "arn:aws:acm:af-south-1:<account>:certificate/<id>"
+
+# Autoscaling
+api_min_count         = 2
+api_max_count         = 10
+api_requests_per_task = 500
+worker_max_count      = 4   # beat runs as its own single service, so workers can scale
+
+# High availability: false = one NAT gateway per AZ (survives an AZ outage, costs more)
+single_nat_gateway = false
+
+# Disaster recovery — copies data outside Africa; confirm residency with BoG first.
+enable_dr  = false
+dr_region  = "eu-west-1"

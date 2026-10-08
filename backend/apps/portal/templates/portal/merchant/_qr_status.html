@@ -1,0 +1,11 @@
+{% if req.status == 'open' %}
+<div id="status" hx-get="{% url 'portal:qr_request_status' req.token %}" hx-trigger="every 3s" hx-swap="outerHTML"
+     class="inline-flex items-center gap-2 text-sm text-warning">
+  <span class="inline-block w-2 h-2 rounded-full bg-warning animate-pulse"></span>
+  Waiting for the customer to scan and pay… expires {{ req.expires_at|date:"H:i" }}
+</div>
+{% elif req.status == 'paid' %}
+<div id="status" class="text-success font-semibold text-lg">✓ Paid{% if req.payment %} · {{ req.payment.reference }}{% endif %}</div>
+{% else %}
+<div id="status" class="text-ink/60 text-sm">This request has {{ req.get_status_display|lower }}.</div>
+{% endif %}

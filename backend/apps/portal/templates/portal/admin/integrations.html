@@ -1,0 +1,47 @@
+{% extends "portal/base.html" %}
+{% block title %}Integrations · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Integrations</h1>
+<p class="text-sm text-ink/60 mb-4">
+  Every external party SokoPay connects to. <b>Available</b> = money can flow through it
+  now. <b>Placeholder</b> = built and wired, waiting on the agreement, API docs and
+  credentials listed. Payments to placeholders are refused before the customer pays.
+</p>
+
+<div class="flex flex-wrap gap-2 mb-4 text-sm">
+  <a href="{% url 'portal:integrations' %}"
+     class="px-3 py-1 rounded-md border {% if not active %}border-orange text-orange{% else %}border-ink/15{% endif %}">All</a>
+  {% for c in categories %}
+  <a href="?category={{ c }}"
+     class="px-3 py-1 rounded-md border capitalize {% if active == c %}border-orange text-orange{% else %}border-ink/15{% endif %}">{{ c }}</a>
+  {% endfor %}
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-4 py-2">Connector</th><th>Type</th><th>Status</th>
+          <th>Regulator</th><th class="px-4">To go live</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr class="border-t border-gray-50 align-top">
+        <td class="px-4 py-2">
+          <div class="font-medium">{{ r.name }}</div>
+          <div class="font-mono text-xs text-ink/40">{{ r.key }}</div>
+        </td>
+        <td class="py-2 capitalize">{{ r.category }}</td>
+        <td class="py-2">
+          <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium
+            {% if r.status == 'available' %}bg-green-100 text-success
+            {% elif r.status == 'placeholder' %}bg-amber-100 text-warning
+            {% else %}bg-gray-100 text-ink/60{% endif %}">{{ r.status }}</span>
+        </td>
+        <td class="py-2 text-ink/70">{{ r.regulator }}</td>
+        <td class="px-4 py-2 text-ink/70 text-xs">{{ r.go_live }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

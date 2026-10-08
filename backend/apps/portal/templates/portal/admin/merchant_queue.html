@@ -1,0 +1,27 @@
+{% extends "portal/base.html" %}
+{% block title %}Merchant review · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Merchant review queue</h1>
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">Business</th><th>Type</th><th>Submitted</th><th class="px-5">Status</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for m in merchants %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ m.trading_name|default:m.legal_name }}</td>
+        <td class="capitalize">{{ m.get_business_type_display }}</td>
+        <td>{{ m.updated_at|date:"d M Y, H:i" }}</td>
+        <td class="px-5">{% include "portal/_status_pill.html" with status=m.status %}</td>
+        <td class="px-5 text-right">
+          <a href="{% url 'portal:merchant_detail' m.id %}" class="text-orange">Review →</a>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-ink/40">Queue is clear.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

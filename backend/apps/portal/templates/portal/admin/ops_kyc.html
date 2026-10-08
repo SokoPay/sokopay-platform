@@ -1,0 +1,18 @@
+{% extends "portal/base.html" %}
+{% block title %}KYC · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">KYC &amp; wallet holds</h1>
+<div class="grid sm:grid-cols-3 gap-3 mb-5">{% for label, n in tier_rows %}<div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">{{ label }}</div><div class="text-2xl font-semibold">{{ n }}</div></div>{% endfor %}</div>
+<form method="post" class="bg-surface rounded-lg shadow-sm p-4 mb-5 flex flex-wrap gap-2 text-sm">{% csrf_token %}
+  <input name="account" required placeholder="Customer phone or wallet ID" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="reason" required placeholder="Reason (recorded)" class="flex-1 min-w-[14rem] border border-gray-200 rounded-md px-3 py-2">
+  <button name="action" value="hold" class="border border-danger text-danger rounded-md px-3 py-2">Place hold</button>
+  <button name="action" value="release" class="border border-success text-success rounded-md px-3 py-2">Release hold</button>
+</form>
+<h2 class="font-medium mb-2">Wallets on hold</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Since</th><th>Customer</th><th>Reason</th><th>By</th></tr></thead>
+  <tbody>{% for p in held %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ p.frozen_at|date:"d M Y H:i" }}</td><td>{{ p.user.full_name }} · {{ p.user.phone }}</td><td>{{ p.frozen_reason }}</td><td>{{ p.frozen_by.full_name|default:"System" }}</td></tr>
+  {% empty %}<tr><td colspan="4" class="px-4 py-8 text-center text-ink/40">No wallets on hold.</td></tr>{% endfor %}</tbody></table></div>
+<p class="text-xs text-ink/40 mt-2">Holds from an AML case ("AML review …") can only be released from that alert, so the decision stays on the case file.</p>
+{% endblock %}

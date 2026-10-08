@@ -1,0 +1,14 @@
+{% comment %}Polled by HTMX while a batch is paying out; stops polling once final.{% endcomment %}
+<div id="progress" class="bg-surface rounded-lg shadow-sm p-4 mb-6"
+     {% if batch.status == 'processing' %}hx-get="{% url 'portal:bulk_progress' batch.pk %}" hx-trigger="every 3s" hx-swap="outerHTML"{% endif %}>
+  {% with done=batch.paid_count|add:batch.failed_count %}
+  <div class="flex justify-between text-sm mb-2">
+    <span>{% if batch.status == 'processing' %}Paying recipients…{% else %}Finished{% endif %}</span>
+    <span class="tabular-nums">{{ batch.paid_count }} paid · {{ batch.failed_count }} failed · {{ done }} / {{ batch.valid_count }}</span>
+  </div>
+  <div class="h-2 bg-gray-100 rounded-full overflow-hidden">
+    <div class="h-full bg-success" style="width: {% widthratio done batch.valid_count|default:1 100 %}%"></div>
+  </div>
+  {% if batch.failed_count %}<p class="text-xs text-ink/60 mt-2">Failed rows have been refunded to your balance. Download the results file for details.</p>{% endif %}
+  {% endwith %}
+</div>

@@ -1,0 +1,24 @@
+{% extends "portal/base.html" %}
+{% block title %}Screening · Compliance{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Screening matches</h1>
+<p class="text-sm text-ink/60 mb-4">Compare date of birth, nationality and ID before deciding. Sanctions matches keep the wallet on hold until cleared.</p>
+{% include "portal/admin/_compliance_nav.html" %}
+<div class="space-y-3">
+  {% for m in matches %}
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm">
+    <div class="flex flex-wrap justify-between gap-2">
+      <div><span class="font-semibold">{{ m.name_screened }}</span> ({{ m.user.phone }}) resembles <span class="font-semibold">{{ m.entry_name }}</span>
+        <span class="text-ink/50">· {{ m.entry.get_source_display|default:"removed list entry" }} · {{ m.entry_kind }}{% if m.entry.dob %} · DOB {{ m.entry.dob }}{% endif %}{% if m.entry.nationality %} · {{ m.entry.nationality }}{% endif %}</span></div>
+      <div class="font-mono">score {{ m.score }}</div>
+    </div>
+    <form method="post" class="flex flex-wrap gap-2 mt-3">{% csrf_token %}
+      <input type="hidden" name="match" value="{{ m.pk }}">
+      <input name="reason" required placeholder="Reason (e.g. DOB 1995 vs 1970 on list)" class="flex-1 min-w-[16rem] border border-gray-200 rounded-md px-3 py-1.5">
+      <button name="decision" value="clear" class="border border-success text-success rounded-md px-3 py-1.5">Not the same person</button>
+      <button name="decision" value="confirm" class="bg-danger text-white rounded-md px-3 py-1.5">Confirm match</button>
+    </form>
+  </div>
+  {% empty %}<div class="bg-surface rounded-lg shadow-sm p-8 text-center text-ink/40">Nothing to review.</div>{% endfor %}
+</div>
+{% endblock %}

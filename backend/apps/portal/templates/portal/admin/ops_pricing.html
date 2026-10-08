@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block title %}Prices · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Fees &amp; agent commissions</h1>
+<p class="text-sm text-ink/60 mb-4">Prices change only through a proposal approved by a second finance user. Approved prices can't be edited or back-dated; propose a new one with a later start.</p>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto mb-6"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Type</th><th>Product</th><th>In force</th><th>Since</th><th class="text-right px-4">On GH₵100</th></tr></thead>
+  <tbody>{% for c in current %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ c.kind }}</td><td>{{ c.product }}</td><td>{{ c.describe }}</td><td>{% if c.rule %}{{ c.rule.effective_from|date:"d M Y H:i" }}{% else %}—{% endif %}</td><td class="text-right px-4 tabular-nums">{{ c.example }}</td></tr>{% endfor %}</tbody>
+</table></div>
+<form method="post" class="bg-surface rounded-lg shadow-sm p-4 mb-6 text-sm grid md:grid-cols-4 gap-2">{% csrf_token %}<input type="hidden" name="action" value="propose">
+  <select name="key" class="border border-gray-200 rounded-md px-3 py-2 md:col-span-2">{% for c in current %}<option value="{{ c.key }}">{{ c.kind }} · {{ c.product }}</option>{% endfor %}</select>
+  <input name="flat" placeholder="Flat GH₵ (e.g. 0.50)" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="percent" placeholder="Percent (e.g. 1.5)" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="min" placeholder="Minimum GH₵" class="border border-gray-200 rounded-md px-3 py-2">
+  <input name="max" placeholder="Maximum GH₵ (blank = none)" class="border border-gray-200 rounded-md px-3 py-2">
+  <input type="datetime-local" name="effective_from" class="border border-gray-200 rounded-md px-3 py-2" title="Start (blank = once approved)">
+  <input name="note" required placeholder="Why (kept on the audit trail)" class="border border-gray-200 rounded-md px-3 py-2">
+  <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2 md:col-span-4">Propose price change</button>
+</form>
+<h2 class="font-medium mb-2">Waiting for approval</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto mb-6"><table class="w-full text-sm"><tbody>
+{% for r in pending %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ r.get_kind_display }} · {{ r.get_product_display }}</td><td>{{ r.describe }}</td><td>from {{ r.effective_from|date:"d M Y H:i" }}</td><td class="text-xs text-ink/50">{{ r.note }} · {{ r.proposed_by.full_name }}</td>
+  <td class="px-4"><form method="post" class="flex gap-2 justify-end">{% csrf_token %}<input type="hidden" name="rule" value="{{ r.pk }}"><button name="action" value="approve" class="bg-success text-white rounded-md px-3 py-1">Approve</button><button name="action" value="reject" class="border border-danger text-danger rounded-md px-3 py-1">Reject</button></form></td></tr>
+{% empty %}<tr><td class="px-4 py-4 text-ink/40">Nothing waiting.</td></tr>{% endfor %}</tbody></table></div>
+<h2 class="font-medium mb-2">History</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm"><tbody>
+{% for r in history %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ r.decided_at|date:"d M Y" }}</td><td>{{ r.get_kind_display }} · {{ r.get_product_display }}</td><td>{{ r.describe }}</td><td>{{ r.get_status_display }}</td><td class="text-xs text-ink/50">{{ r.proposed_by.full_name }} → {{ r.decided_by.full_name }} · {{ r.note }}</td></tr>
+{% empty %}<tr><td class="px-4 py-4 text-ink/40">No changes yet: launch defaults apply.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

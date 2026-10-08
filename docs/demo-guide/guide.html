@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SokoPay Demo and Walkthrough Guide</title>
+<style>
+  @page { size: A4; margin: 18mm 16mm 18mm 16mm; }
+  :root { --ink:#231F20; --muted:#5E5859; --orange:#F26522; --bg:#F7F5F4; --line:#E8E2DF; }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: var(--ink); font-size: 9.7pt; line-height: 1.38; margin: 0; }
+  h1 { font-size: 22pt; margin: 0 0 4mm; }
+  h2 { font-size: 15pt; margin: 0 0 3mm; padding-bottom: 1.5mm; border-bottom: 2px solid var(--orange); page-break-after: avoid; }
+  h3 { font-size: 11.5pt; margin: 5mm 0 2mm; color: var(--ink); page-break-after: avoid; }
+  h4 { font-size: 10.2pt; margin: 3mm 0 1mm; color: var(--muted); page-break-after: avoid; }
+  p { margin: 1.5mm 0; }
+  .section { page-break-before: always; }
+  .cover { height: 250mm; display: flex; flex-direction: column; justify-content: center; }
+  .brand { font-size: 34pt; font-weight: 800; letter-spacing: .5px; }
+  .brand span { color: var(--orange); }
+  .muted { color: var(--muted); }
+  .note { background: #FFF4EC; border-left: 3px solid var(--orange); padding: 2mm 3mm; margin: 2.5mm 0; font-size: 9.4pt; }
+  .warn { background: #FDECEC; border-left: 3px solid #C62828; padding: 2mm 3mm; margin: 2.5mm 0; font-size: 9.4pt; }
+  table { width: 100%; border-collapse: collapse; margin: 2mm 0 3mm; font-size: 8.9pt; page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+  th { background: var(--ink); color: #fff; text-align: left; padding: 1.4mm 1.8mm; font-weight: 600; }
+  td { border-bottom: 1px solid var(--line); padding: 1.3mm 1.8mm; vertical-align: top; }
+  tr:nth-child(even) td { background: #FBF9F8; }
+  code, .mono { font-family: Consolas, "Courier New", monospace; font-size: 8.8pt; background: var(--bg); padding: 0 1mm; border-radius: 1mm; }
+  pre { font-family: Consolas, "Courier New", monospace; font-size: 8.4pt; background: var(--bg); padding: 2mm 3mm; border-radius: 1.5mm; white-space: pre-wrap; margin: 2mm 0; }
+  ol, ul { margin: 1mm 0 2mm; padding-left: 6mm; }
+  li { margin: .6mm 0; }
+  ol.steps > li { margin: 0.9mm 0; }
+  .who { display: inline-block; background: var(--ink); color: #fff; border-radius: 1mm; padding: 0 1.6mm; font-size: 8.4pt; margin-right: 1mm; }
+  .tag { display:inline-block; border:1px solid var(--orange); color: var(--orange); border-radius: 1mm; padding: 0 1.4mm; font-size: 8pt; }
+  .toc li { margin: .8mm 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; }
+  .card { border: 1px solid var(--line); border-radius: 2mm; padding: 2.5mm 3mm; page-break-inside: avoid; }
+  .card h4 { margin-top: 0; color: var(--ink); }
+</style>
+</head>
+<body>
+
+<!-- ============================================================ COVER -->
+<div class="cover">
+  <div class="brand">SOKO<span>PAY</span></div>
+  <h1>Demo and Walkthrough Guide</h1>
+  <p style="font-size:12.5pt">Everything built so far, the demo data, and a step-by-step walk through every app.</p>
+  <p class="muted">Akaditi Limited · Version 1.0 · 8 October 2026</p>
+  <div class="warn" style="margin-top:10mm">All accounts, passwords, PINs, 2FA secrets and money in this guide are <b>demo data</b> on a local demo
+    server. They exist only in the demo database created by <code>scripts\demo.ps1</code>. Never use them on a real system.</div>
+</div>
+
+<!-- ============================================================ CONTENTS -->
+<div class="section">
+<h2>Contents</h2>
+<ol class="toc">
+  <li><b>What has been built</b>: every item, app by app</li>
+  <li><b>Setting up the demo</b>: start the server, load the seed data, install the apps</li>
+  <li><b>Demo accounts</b>: who is who, logins, what each account already has</li>
+  <li><b>Customer app</b> (SokoPay): step by step</li>
+  <li><b>Agent app</b> (SokoPay Agent): step by step</li>
+  <li><b>Business app</b> (SokoPay Business): step by step</li>
+  <li><b>Merchant web portal</b>: step by step</li>
+  <li><b>Staff back office</b>, role by role: admin, operations, compliance, finance, support</li>
+  <li><b>Online checkout, payment links and the merchant API</b></li>
+  <li><b>USSD for basic phones</b></li>
+  <li><b>The mock partner</b>: approving MoMo prompts and payouts in the demo</li>
+  <li><b>End-to-end scenarios</b>: whole journeys across several apps</li>
+  <li><b>Resetting and troubleshooting</b></li>
+</ol>
+<div class="note">How to read this guide: <span class="who">Kofi</span> marks who is acting (see the account table in section 3).
+  "Back office" means the staff portal at <code>http://127.0.0.1:8000/dashboard/</code>. In the apps, screens are named as they appear on the phone.</div>
+</div>
+
+<!-- ============================================================ 1. WHAT HAS BEEN BUILT -->
+<div class="section">
+<h2>1. What has been built</h2>
+<p>SokoPay is one backend (Django, PostgreSQL), three phone apps (Flutter, Android and iOS), two web portals, public payment pages and a USSD channel. Every regulated feature is built and switched on by the Bank of Ghana licence held (PSP Standard, then Medium, Enhanced, then DEMI).</p>
+
+<h3>1.1 Customer app: SokoPay</h3>
+<table>
+<tr><th style="width:28%">Item</th><th>What it does</th></tr>
+<tr><td>Sign-in and security</td><td>Phone, then a one-time code, then a 6-digit PIN. Fingerprint or face unlock. Privacy cover in the app switcher. Change or forgot PIN (with Ghana Card). Sign out of all devices. Close account.</td></tr>
+<tr><td>Home</td><td>Wallet card with balance, a separate 10-digit wallet ID, Deposit, Cash out and Statements. Service tabs (For you, Pay, Buy, Lifestyle, Finance). Bottom bar: Home, Transfers, Scan QR, Offers, More.</td></tr>
+<tr><td>Wallet</td><td>Balance, top up from mobile money, send to another SokoPay user by phone or wallet ID, with the recipient's name shown before sending.</td></tr>
+<tr><td>Transfers</td><td>To SokoPay users, mobile money (MTN, Telecel, AT), bank accounts and other wallets, with a mandatory name check. Recently paid list. Saved recipients (star).</td></tr>
+<tr><td>Cross-border</td><td>Send abroad (Nigeria, Kenya, Côte d'Ivoire in the demo): quote, rate, fee, what they receive, countdown, then reason and PIN.</td></tr>
+<tr><td>Bills, airtime, data</td><td>Electricity (ECG, NEDCo), water, TV, internet, school fees. Airtime and data bundles, from the wallet or MoMo, with account-name lookup.</td></tr>
+<tr><td>Merchants</td><td>Pay new merchant (scan or type the code). Tabs for recently paid (with pay again) and saved merchants.</td></tr>
+<tr><td>Scan to pay</td><td>Scan a shop's counter QR or a dynamic payment request. Fixed amounts can't be changed.</td></tr>
+<tr><td>Receipts and disputes</td><td>Every payment has a receipt. "Report a problem" opens a dispute with the business; the receipt shows its status.</td></tr>
+<tr><td>Activity and statements</td><td>Unified history (payments, transfers, wallet). Statement for any date range, and a PDF or CSV through a single-use link.</td></tr>
+<tr><td>Cash out at an agent</td><td>"Allow cash out", then the agent requests, then the customer approves with the PIN. The fee is shown before approval.</td></tr>
+<tr><td>Financial services</td><td>Insurance, loans, savings, investment and pension from licensed partners. Apply with consent. Pay in from the wallet and request withdrawals (savings and investment).</td></tr>
+<tr><td>Tickets and food</td><td>Buy event tickets (with a ticket code) and food from partners, paid from the wallet.</td></tr>
+<tr><td>Limits and verification</td><td>Tier 0 (phone), tier 1 (Ghana Card), tier 2 (Ghana Card and selfie). Daily and monthly limits shown.</td></tr>
+<tr><td>Inbox and notifications</td><td>Every alert is kept in the inbox, and tapping a push opens the right screen. Important alerts fall back to SMS.</td></tr>
+<tr><td>Help and legal</td><td>Support, a warning never to share the PIN, and the terms, privacy policy, complaints and acceptable use pages.</td></tr>
+</table>
+
+<h3>1.2 Agent app: SokoPay Agent</h3>
+<table>
+<tr><th style="width:28%">Item</th><th>What it does</th></tr>
+<tr><td>Float and commission</td><td>Float balance, commission earned (paid into float monthly), low-float warning.</td></tr>
+<tr><td>Cash in</td><td>Enter the customer's phone or wallet ID, confirm their name, then credit their wallet from float.</td></tr>
+<tr><td>Cash out</td><td>Request an amount after the customer opens cash out. Wait for the customer's PIN approval, then hand over cash. The agent never sees the customer's balance.</td></tr>
+<tr><td>History</td><td>All cash-ins, cash-outs and top-ups with filters, totals and details.</td></tr>
+<tr><td>Inbox, security, legal</td><td>Alerts (float topped up, approved), biometric lock, Agent Terms.</td></tr>
+</table>
+
+<h3>1.3 Business app: SokoPay Business</h3>
+<table>
+<tr><th style="width:28%">Item</th><th>What it does</th></tr>
+<tr><td>Roles</td><td>Owner, Admin, Finance, Cashier, Developer. Cashiers take payments only. Owner and Finance move money, with the PIN again.</td></tr>
+<tr><td>Counter QR and payment requests</td><td>Static shop QR and code. Dynamic QR with an amount, a 15-minute countdown, and a "Paid" screen.</td></tr>
+<tr><td>Payments</td><td>History with filters and day totals. Payment detail with fee, net, refunds and dispute.</td></tr>
+<tr><td>Refunds</td><td>Full or partial, back to the customer the way they paid (PIN required).</td></tr>
+<tr><td>Disputes</td><td>Answer customer disputes: refund (PIN) or explain. Shows the amount held from settlement.</td></tr>
+<tr><td>Settlements</td><td>Available balance, settle now, settlement accounts (MoMo, bank when available), history.</td></tr>
+<tr><td>Statement</td><td>Balance statement on screen and as a PDF or CSV.</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h3>1.4 Merchant web portal</h3>
+<table>
+<tr><th style="width:28%">Item</th><th>What it does</th></tr>
+<tr><td>Sign-in</td><td>Phone and password, then 2FA (mandatory for Owner, Admin and Finance), with backup codes. Rate-limited.</td></tr>
+<tr><td>Dashboard, payments, payment detail</td><td>Balance, recent payments, filters, refunds from the payment page.</td></tr>
+<tr><td>QR</td><td>Counter QR and dynamic payment requests on screen.</td></tr>
+<tr><td>Payment links</td><td>Shareable links (fixed or any amount, optional maximum uses) with QR codes.</td></tr>
+<tr><td>Bulk pay</td><td>Upload CSV or Excel payroll and supplier payouts. Validated, approved, paid, with a results file.</td></tr>
+<tr><td>Settlements, disputes, statements</td><td>Same as the app, on the web.</td></tr>
+<tr><td>Developers</td><td>API keys (test and live), webhooks (signed events, delivery log, test send, secret rotation).</td></tr>
+<tr><td>Security</td><td>2FA set-up, backup codes.</td></tr>
+</table>
+
+<h3>1.5 Staff back office (role-based)</h3>
+<table>
+<tr><th style="width:22%">Role</th><th>Pages</th></tr>
+<tr><td>All staff</td><td>Overview, Health (live operational numbers)</td></tr>
+<tr><td>Operations</td><td>Merchants (review and approve), Agents (register, activate, suspend, record float), Float approvals, Cash-outs monitor, Disputes (decide), Withdrawals (savings payouts), Support lookup</td></tr>
+<tr><td>Compliance</td><td>AML cases, sanctions and PEP screening, STR (two-officer approval), large transaction reports, watchlists, KYC holds, Support lookup, Audit log, Returns</td></tr>
+<tr><td>Finance</td><td>Settlement approvals, Safeguarding, Reconciliation, Prices (fees and commissions, two-person approval), Float approvals, Returns, Audit log</td></tr>
+<tr><td>Support</td><td>Customer lookup (phone, wallet ID or SP- reference), sign the customer out everywhere</td></tr>
+<tr><td>Admin</td><td>Integrations catalogue, plus everything above</td></tr>
+</table>
+
+<h3>1.6 Public pages and channels</h3>
+<table>
+<tr><th style="width:28%">Item</th><th>What it does</th></tr>
+<tr><td>Hosted checkout</td><td><code>/m/&lt;shop code&gt;</code>, <code>/q/&lt;request&gt;</code>, <code>/l/&lt;link&gt;</code>, <code>/c/&lt;session&gt;</code>: pay by mobile money prompt, live status, return to the shop.</td></tr>
+<tr><td>Legal pages</td><td><code>/legal/</code>: privacy, terms, merchant terms, agent terms, complaints, acceptable use (drafts for counsel).</td></tr>
+<tr><td>USSD</td><td>Balance, send, airtime, cash out (with PIN approval), mini statement, wallet ID, for phones without data.</td></tr>
+<tr><td>Merchant API and webhooks</td><td>Charges, checkout sessions, status. Signed webhooks for payments, refunds, settlements and disputes. OpenAPI docs at <code>/api/docs/</code>.</td></tr>
+</table>
+
+<h3>1.7 Under the hood</h3>
+<div class="grid2">
+<div class="card"><h4>Money</h4><ul>
+<li>Double-entry ledger in pesewas: the books always sum to zero.</li>
+<li>Idempotent; row locks proven on PostgreSQL.</li>
+<li>Reserve, send, resolve for every payout. Ambiguous outcomes are never refunded blindly.</li>
+<li>Settlement with maker-checker, refunds, disputes with settlement holds, bulk payouts.</li>
+<li>Configurable fees and agent commissions, with two-person approval.</li>
+<li>Safeguarding check and daily reconciliation.</li></ul></div>
+<div class="card"><h4>Compliance and security</h4><ul>
+<li>Licence gate per capability.</li>
+<li>KYC tiers using Bank of Ghana limits.</li>
+<li>AML monitoring rules, sanctions and PEP screening, STR with four eyes, large transaction reports, no tipping off.</li>
+<li>Encryption, Argon2, revocable tokens, SIM-swap protection.</li>
+<li>2FA and rate limits. Append-only audit log. Request IDs.</li>
+<li>27 security findings fixed.</li></ul></div>
+<div class="card"><h4>Integrations (ready for partners)</h4><ul>
+<li>Payment rail: Korba or Nsano, one partner, certification gate.</li>
+<li>Billers, telcos, GhIPSS, NIA identity, SMS (Hubtel, mNotify), push (Firebase).</li>
+<li>Insurance, lending, savings, investment and pension partners.</li>
+<li>Cross-border (Onafriq, Brij), tickets, food, inbound remittances.</li></ul></div>
+<div class="card"><h4>Engineering</h4><ul>
+<li>487 automated backend tests on PostgreSQL. Flutter tests.</li>
+<li>CI/CD pipelines and Dockerfile.</li>
+<li>Terraform for AWS (validated), monitoring and alarms, health page.</li>
+<li>Backup and restore drill (passed).</li>
+<li>Legal drafts and a six-pillar review in <code>docs/</code>.</li></ul></div>
+</div>
+</div>
+
+<!-- ============================================================ 2. SETUP -->
+<div class="section">
+<h2>2. Setting up the demo</h2>
+<h3>2.1 Start the demo server and load the seed data</h3>
+<ol class="steps">
+<li>Open PowerShell in <code>SokoPay\sokopay-platform\backend</code>.</li>
+<li>Run:<pre>powershell -ExecutionPolicy Bypass -File scripts\demo.ps1</pre>
+This builds a fresh demo database (<code>demo.sqlite3</code>), loads all the demo data (<code>manage.py seed_demo</code>), saves the logins to <code>backend\demo-credentials.md</code>, and starts the server on port 8000. Keep this window open: it is also where sign-in codes appear.</li>
+<li>Open <code>http://127.0.0.1:8000/dashboard/</code> in a browser for the portals, and <code>http://127.0.0.1:8000/dev/mock-partner/</code> for the mock partner (section 11).</li>
+</ol>
+<div class="note">The demo runs with the top licence (DEMI) so every feature is on. The script sets this for the demo only, and your normal <code>.env</code> is untouched.</div>
+
+<h3>2.2 Where the one-time sign-in codes come from</h3>
+<p>In the demo no real SMS is sent. Each code is printed in the server window as a line like:</p>
+<pre>[SMS:console] to=+233244000201 | Your SokoPay code is 482915 ...</pre>
+<p>Important alerts that fall back to SMS (cash-out requests, PIN reset) also appear here.</p>
+
+<h3>2.3 Portal 2FA codes</h3>
+<p>Every portal account has 2FA switched on. Either add the account's <b>2FA secret</b> (section 3) to an authenticator app (Google or Microsoft Authenticator: "Enter a setup key", time-based), or print the current code in a second PowerShell window:</p>
+<pre>$env:DATABASE_URL="sqlite:///demo.sqlite3"; $env:ALLOW_MOCK_INTEGRATIONS="True"
+.\.venv\Scripts\python.exe manage.py demo_2fa_code +233200000004</pre>
+
+<h3>2.4 Install the phone apps</h3>
+<ol class="steps">
+<li>Install Android Studio and create an Android emulator (Device Manager, then any Pixel phone, Android 14 or newer). An emulator is needed because the demo apps reach the demo server at <code>10.0.2.2:8000</code>, which is the emulator's address for your computer.</li>
+<li>Start the emulator, then drag <code>mobile\dist\sokopay-customer.apk</code>, <code>sokopay-agent.apk</code> and <code>sokopay-merchant.apk</code> onto it (or run <code>adb install</code>).</li>
+<li>To show several apps at once, start a second emulator, or switch between apps on one.</li>
+</ol>
+<div class="note">On a real phone the APKs need a server reachable over HTTPS. Rebuild with <code>--dart-define=API_BASE_URL=https://your-server/api/v1</code>; see <code>mobile\dist\README.md</code>.</div>
+
+<h3>2.5 Signing in to an app</h3>
+<ol class="steps">
+<li>Enter the phone number from section 3 (for example <code>0244000201</code>) and tap <b>Send code</b>.</li>
+<li>Type the code from the server window (2.2).</li>
+<li>Because demo users already have a PIN, the app asks for it: <b>428173</b>.</li>
+<li>Optional: turn on fingerprint unlock under More, then Security.</li>
+</ol>
+</div>
+
+<!-- ============================================================ 3. ACCOUNTS -->
+<div class="section">
+<h2>3. Demo accounts</h2>
+<p>All portal passwords are <b>SokoDemo#2026</b>. All app PINs are <b>428173</b>. The shop's merchant code is <b>GRACEMTN</b>.</p>
+<table>
+<tr><th>Who</th><th>Phone</th><th>Where</th><th>Role / state</th><th>2FA secret (portal)</th></tr>
+<tr><td>Abena Admin</td><td class="mono">0200000001</td><td>Back office</td><td>Superuser (all pages)</td><td class="mono">N354T55FZT5THZDZNM5YN5AO5ZBHHJ6O</td></tr>
+<tr><td>Kwame Operations</td><td class="mono">0200000002</td><td>Back office</td><td>Operations</td><td class="mono">NUCHTM2EFXQNZRFZ5O4TRZ6KIIRA3YUN</td></tr>
+<tr><td>Efua Operations</td><td class="mono">0200000003</td><td>Back office</td><td>Operations (second approver)</td><td class="mono">XPKXKUJSI2G6LWJ4I3YTDO2PRBYYU34A</td></tr>
+<tr><td>Kojo Compliance</td><td class="mono">0200000004</td><td>Back office</td><td>Compliance (prepares STRs)</td><td class="mono">LBYXJBZTZOKU2VTLIEZ6NK2DDYENQRXH</td></tr>
+<tr><td>Akua Compliance</td><td class="mono">0200000005</td><td>Back office</td><td>Compliance (second officer)</td><td class="mono">QPVG7WGXK2RJSENAYSN6KEHSX2YR4RYT</td></tr>
+<tr><td>Yaa Finance</td><td class="mono">0200000006</td><td>Back office</td><td>Finance</td><td class="mono">FOY55XAQI5TFNCLQQZJVN4WP4O4MIRAO</td></tr>
+<tr><td>Nii Finance</td><td class="mono">0200000007</td><td>Back office</td><td>Finance (second approver)</td><td class="mono">UYUMCKN4IA2J3WMNSCL7UT5WOHIXPS4Q</td></tr>
+<tr><td>Selorm Support</td><td class="mono">0200000008</td><td>Back office</td><td>Support</td><td class="mono">EFLDNI7BHJOG4VXK4NUJYKCLKISNEQHW</td></tr>
+<tr><td>Grace Owusu</td><td class="mono">0200000301</td><td>Merchant portal, Business app</td><td>Owner, Grace Mountain Stores</td><td class="mono">WE7AXIGBU5ZDNGRI6MAUWIXHND7X7LNE</td></tr>
+<tr><td>Kwesi Cashier</td><td class="mono">0200000302</td><td>Business app</td><td>Cashier, Grace Mountain Stores</td><td>-</td></tr>
+<tr><td>Esi Mensah</td><td class="mono">0240000101</td><td>Agent app</td><td>Active agent, Esi's Kiosk (Madina)</td><td>-</td></tr>
+<tr><td>Yaw Boateng</td><td class="mono">0240000102</td><td>Agent app</td><td>Pending agent, Yaw's Shop (Kumasi)</td><td>-</td></tr>
+<tr><td>Kofi Asante</td><td class="mono">0244000201</td><td>Customer app</td><td>Tier 1 (Ghana Card)</td><td>-</td></tr>
+<tr><td>Ama Serwaa</td><td class="mono">0244000202</td><td>Customer app</td><td>Tier 2 (Ghana Card and selfie)</td><td>-</td></tr>
+<tr><td>Yaw Darko</td><td class="mono">0244000203</td><td>Customer app</td><td>Tier 0 (phone only)</td><td>-</td></tr>
+</table>
+
+<h3>3.1 What the seed data already contains</h3>
+<table>
+<tr><th style="width:24%">Area</th><th>Ready to explore</th></tr>
+<tr><td>Wallets</td><td>
+<ul>
+<li>Cash-ins at Esi's Kiosk: Kofi GH₵3,000, Ama GH₵5,000, Yaw GH₵400.</li>
+<li>Transfers: Kofi to Ama GH₵150, Ama to Yaw GH₵60.</li>
+<li>Kofi has saved Ama as a recipient and the shop as a merchant.</li>
+</ul></td></tr>
+<tr><td>Bills and airtime</td><td>Kofi paid ECG prepaid GH₵100 (meter 01234567890). Ama bought GH₵20 of MTN airtime.</td></tr>
+<tr><td>Grace Mountain Stores</td><td>
+<ul>
+<li>Approved shop with code GRACEMTN and an Owner and a Cashier.</li>
+<li>Payments from Kofi (wallet and MoMo), Ama and Yaw (dynamic QR "Order 104").</li>
+<li>Two payment links. A GH₵40 refund to Ama.</li>
+<li>A GH₵200 settlement waiting for finance approval.</li>
+</ul></td></tr>
+<tr><td>Disputes</td><td>Kofi's "rice bag torn" dispute is waiting for the shop. Ama's "charged twice" dispute was answered by the shop and is waiting for SokoPay.</td></tr>
+<tr><td>Agents</td><td>
+<ul>
+<li>Esi has a GH₵20,000 float (approved by a second staff member) and a GH₵5,000 top-up waiting for approval.</li>
+<li>Kofi completed a GH₵200 cash-out.</li>
+<li>A 0.2% cash-in commission is active.</li>
+<li>Yaw's Shop is waiting to be activated.</li>
+</ul></td></tr>
+<tr><td>Cross-border, lifestyle, savings</td><td>
+<ul>
+<li>Ama sent GH₵300 to Nigeria (still on its way) and GH₵100 to Kenya (delivered).</li>
+<li>Kofi bought 2 football tickets; Ama ordered jollof.</li>
+<li>Kofi's savings has GH₵250 paid in and a GH₵50 withdrawal waiting.</li>
+<li>Ama has an insurance application.</li>
+</ul></td></tr>
+<tr><td>Compliance</td><td>
+<ul>
+<li>A high-severity AML case on Yaw (money in and straight out) with a note and a <b>draft STR</b> waiting for a second officer.</li>
+<li>A medium case on Ama.</li>
+<li>A demo sanctions entry.</li>
+</ul></td></tr>
+<tr><td>Finance</td><td>
+<ul>
+<li>A cash-out fee (1%, minimum GH₵0.50) proposed by Yaa and waiting for Nii.</li>
+<li>Yesterday's reconciliation with three breaks.</li>
+<li>Trust account balance recorded and the safeguarding check run.</li>
+</ul></td></tr>
+</table>
+</div>
+
+<!-- ============================================================ 4. CUSTOMER APP -->
+<div class="section">
+<h2>4. Customer app (SokoPay): step by step</h2>
+<p>Sign in as <span class="who">Kofi</span> <code>0244000201</code> (section 2.5) unless a step says otherwise.</p>
+
+<h3>4.1 Home, wallet and wallet ID</h3>
+<ol class="steps">
+<li>The home screen shows the wallet card. Kofi's balance is <b>GH₵2,114.00</b>: he started with GH₵3,000, then sent to Ama, paid ECG, paid the shop by wallet, and cashed out at Esi's.</li>
+<li>The wallet card (and More) shows Kofi's 10-digit <b>wallet ID</b> (starts with 7). Anyone can pay Kofi with it instead of his number. The demo prints each customer's ID in <code>demo-credentials.md</code>.</li>
+<li>Browse the service tabs: <b>For you</b>, <b>Pay</b>, <b>Buy</b>, <b>Lifestyle</b>, <b>Finance</b>.</li>
+</ol>
+
+<h3>4.2 Activity, receipts and statements</h3>
+<ol class="steps">
+<li>Tap <b>Statements</b> on the wallet card (or the Activity tile). Filter by Payments, Transfers or Wallet, and by Today, 7 days or 30 days.</li>
+<li>Tap the payment to Grace Mountain Stores to open its <b>receipt</b>.</li>
+<li>Go to <b>More</b>, then <b>Statements</b>. Pick a date range, then tap the PDF icon. The statement opens in the browser through a single-use link (opening balance, every movement, closing balance).</li>
+</ol>
+
+<h3>4.3 Send money</h3>
+<ol class="steps">
+<li><b>Transfers</b>, then <b>SokoPay user</b>. Tap the star in the number field and pick <b>Ama S.</b> from saved recipients (or type <code>0244000202</code>, or Ama's wallet ID).</li>
+<li>Tap <b>Check</b>. The app shows "Ama S." before anything moves. Enter GH₵20, then send.</li>
+<li>Try a mistyped number: the app refuses because there's no SokoPay account. Money is never sent to a number nobody owns.</li>
+<li><b>Mobile money</b>, <b>Bank</b> and <b>Other wallets</b> work the same way, with "Check name" first.</li>
+</ol>
+
+<h3>4.4 Pay bills, airtime and data</h3>
+<ol class="steps">
+<li>The <b>Pay</b> tab, then <b>Electricity</b>, then <b>ECG Prepaid</b>. Enter meter <code>01234567890</code> and look up the account name.</li>
+<li>Enter GH₵50. Choose <b>SokoPay wallet</b> as the source. The fee is shown; then pay. The receipt shows the prepaid token.</li>
+<li><b>Buy</b>, then <b>Bundles</b>: pick a network and a bundle. "Buy for someone else" lets you enter another number.</li>
+</ol>
+
+<h3>4.5 Merchants: pay a shop</h3>
+<ol class="steps">
+<li>The <b>Pay</b> tab, then <b>Merchant</b>. This is the Merchants screen with "Pay new merchant", <b>RECENTLY PAID</b> and <b>SAVED MERCHANTS</b>.</li>
+<li>Under Recently paid, tap <b>Pay again</b> on Grace Mountain Stores. Enter GH₵25 and pay from the wallet.</li>
+<li>Tap <b>Pay new merchant</b> (or the Scan QR button) and type the code <code>GRACEMTN</code> to pay any shop by its code.</li>
+<li>Tap the star on a recent payment to save that merchant.</li>
+</ol>
+</div>
+
+<div class="section">
+<h3>4.6 Report a problem (dispute)</h3>
+<ol class="steps">
+<li>Open a payment to Grace Mountain Stores from Activity. At the bottom, tap <b>Report a problem with this payment</b>.</li>
+<li>Choose a reason (for example "I was charged the wrong amount"), describe it (at least 10 characters), and tap Send.</li>
+<li>The receipt now shows "Dispute: Waiting for the merchant". The shop has 7 days to answer (section 6.5). The disputed amount is held from the shop's payouts.</li>
+<li>Kofi's earlier "rice bag torn" dispute is already on his first shop payment's receipt.</li>
+</ol>
+
+<h3>4.7 Cash out at an agent: the customer's side</h3>
+<ol class="steps">
+<li>On the wallet card tap <b>Cash out</b>, then <b>Allow cash out</b>. A 10-minute window opens for one agent request.</li>
+<li>Give the agent your number or wallet ID (section 5.3 shows the agent's side).</li>
+<li>When the agent sends the request, the app shows "Esi's Kiosk wants to pay you GH₵…". Check the amount (and any fee), then tap <b>Approve</b> and enter the PIN. Only then does the agent hand over the cash.</li>
+<li>Tap <b>Decline</b> if you didn't ask for it. The agent is told not to hand over cash.</li>
+</ol>
+
+<h3>4.8 Send abroad (sign in as <span class="who">Ama</span> <code>0244000202</code>)</h3>
+<ol class="steps">
+<li><b>Transfers</b>, then <b>Cross border</b>. Choose <b>Nigeria</b> and <b>Mobile money</b>. Enter the recipient's full name, network (for example <code>mtn_ng</code>), phone <code>+2348031234567</code> and GH₵100.</li>
+<li>Tap <b>Get quote</b>. You see what they receive in NGN, the rate, the fee, the total from your wallet, and a countdown.</li>
+<li>Choose a reason and tap <b>Confirm and send</b>, then the PIN. The status is "On its way". To finish it, use the mock partner (section 11, Delivered or Refused). Refused money returns to the wallet automatically.</li>
+<li>Try the recipient name <b>Demo Sanctioned Person</b>: the transfer is refused with a neutral message, compliance gets an alert, and <b>Ama's wallet is put on hold</b> for review. Release it from the case in the back office (section 8.3), or try this last.</li>
+</ol>
+
+<h3>4.9 Tickets and food</h3>
+<ol class="steps">
+<li>The <b>Lifestyle</b> tab, then <b>Tickets</b>. Pick "Kotoko vs Hearts", choose a quantity, pay from the wallet with the PIN. <b>My tickets</b> shows the ticket code.</li>
+<li><b>Food</b> works the same way. "Sold-out show (test)" shows an automatic refund.</li>
+</ol>
+
+<h3>4.10 Savings, insurance and loans</h3>
+<ol class="steps">
+<li>More, then <b>Insurance &amp; loans</b> (Financial services). Tabs: Insurance, Loans, Savings, Invest, Pension. Apply for a product; the consent box is required.</li>
+<li>Tap the assignment icon (<b>My applications</b>). Kofi's <b>Akwaaba Easy Save</b> shows "paid in GH₵250 · withdrawal of GH₵50 pending".</li>
+<li>Tap <b>Pay in</b> (enter an amount, then the PIN) or <b>Withdraw</b>. A withdrawal waits until operations confirm the provider paid (section 8.2).</li>
+</ol>
+
+<h3>4.11 Limits, verification and security (sign in as <span class="who">Yaw</span> <code>0244000203</code>)</h3>
+<ol class="steps">
+<li>More, then <b>Limits &amp; verification</b>. Yaw is tier 0. Enter any Ghana Card in the format <code>GHA-734567890-3</code> to upgrade to tier 1 (the demo identity check accepts any well-formed number except <code>GHA-000000000-0</code>).</li>
+<li>More, then <b>Security</b>: Change PIN, Profile (the name is locked after Ghana Card verification), Sign out of all devices, Close account (needs a zero balance), and <b>Help &amp; legal</b>.</li>
+<li><b>Forgot PIN</b> on the PIN screen needs the code and, for verified customers, the Ghana Card. Afterwards sending is capped at GH₵500 for 24 hours (SIM-swap protection).</li>
+<li>The bell icon on Home opens the <b>inbox</b>. Every alert is there, and tapping one opens the right screen.</li>
+</ol>
+</div>
+
+<!-- ============================================================ 5. AGENT APP -->
+<div class="section">
+<h2>5. Agent app (SokoPay Agent): step by step</h2>
+<p>Sign in as <span class="who">Esi</span> <code>0240000101</code>, PIN 428173.</p>
+<h3>5.1 Home</h3>
+<ol class="steps">
+<li>Home shows <b>Your float</b>: <b>GH₵11,800</b> after the seeded cash-ins and cash-out. <b>Commission earned</b> appears after the next cash-in (0.2%). Commission is paid into the float on the 1st of each month.</li>
+<li>The bell opens the inbox, for example "Float topped up".</li>
+</ol>
+<h3>5.2 Cash in</h3>
+<ol class="steps">
+<li>Tap <b>Cash in</b>. Enter the customer's phone (<code>0244000203</code> for Yaw) or wallet ID.</li>
+<li>The app shows the customer's name ("Yaw D."). Confirm it is the person in front of you.</li>
+<li>Enter GH₵100 and confirm. Esi's float goes down, Yaw's wallet goes up, and Yaw gets an alert. Commission is earned.</li>
+</ol>
+<h3>5.3 Cash out (three steps, with the customer)</h3>
+<ol class="steps">
+<li>The customer (<span class="who">Kofi</span>) taps <b>Cash out</b>, then <b>Allow cash out</b> in his app first (section 4.7). Without this the request is refused: agents can never take money from a wallet alone.</li>
+<li>Esi taps <b>Cash out</b>, enters Kofi's number, and enters GH₵50. The screen says "waiting for the customer… do NOT hand over cash".</li>
+<li>Kofi approves with his PIN. Esi's screen turns to <b>Approved: hand over GH₵50</b>. If Kofi declines or 5 minutes pass, Esi is told not to hand over cash.</li>
+<li>Esi never sees Kofi's balance. If Kofi doesn't have enough, only Kofi is told.</li>
+</ol>
+<h3>5.4 History</h3>
+<ol class="steps">
+<li>Tap <b>See all</b>. Filter by Cash in, Cash out or Top-up and by period. Tap a transaction for its details and AG- reference.</li>
+</ol>
+<h3>5.5 A pending agent</h3>
+<p>Sign in as <span class="who">Yaw Boateng</span> <code>0240000102</code>. The app reports that this isn't an active agent yet. Operations activates it in the back office (section 8.2). The inbox then shows "Agent account activated".</p>
+
+<!-- ============================================================ 6. BUSINESS APP -->
+<h2 style="margin-top:8mm">6. Business app (SokoPay Business): step by step</h2>
+<p>Sign in as <span class="who">Grace</span> (Owner) <code>0200000301</code>, PIN 428173.</p>
+<h3>6.1 Home and Counter QR</h3>
+<ol class="steps">
+<li>Home shows the balance (Owner, Admin and Finance only) and cards: Counter QR, Request payment, Payments, Settlements, Disputes, Statement.</li>
+<li><b>Counter QR</b> shows the shop's QR and code <b>GRACEMTN</b>. Print it for the counter. Any customer can scan it or type the code.</li>
+</ol>
+<h3>6.2 Request a payment (dynamic QR)</h3>
+<ol class="steps">
+<li><b>Request payment</b>: enter GH₵45 and "Order 210", then <b>Create</b>. A QR with a 15-minute countdown appears.</li>
+<li>In the customer app (Kofi), Scan QR and scan it from the screen (or open Activity to see it after paying). The amount is fixed.</li>
+<li>Grace's screen switches to <b>Paid</b> within seconds, and the cashier gets "Payment received".</li>
+</ol>
+</div>
+
+<div class="section">
+<h3>6.3 Payments and refunds</h3>
+<ol class="steps">
+<li><b>Payments</b>: filter Paid, Pending, Failed or Refunded and Today, 7 days or 30 days. The top shows gross, fees and net.</li>
+<li>Open Ama's GH₵240 payment: amount, SokoPay fee, "You receive", and the GH₵40 refund already made.</li>
+<li>Tap <b>Refund</b>: enter GH₵20 and a reason, then the PIN. A wallet payment is refunded instantly; a MoMo payment is sent back by mobile money. The fee isn't returned.</li>
+</ol>
+<h3>6.4 Settlements</h3>
+<ol class="steps">
+<li><b>Settlements</b>: available balance (minus disputed amounts on hold), accounts (MTN 0244000301, verified), and history including the <b>GH₵200 settlement awaiting SokoPay approval</b>.</li>
+<li><b>Settle now</b>: pick the account, enter an amount and the PIN. Large amounts or accounts changed in the last 72 hours need a finance approval (section 8.4).</li>
+<li><b>Add account</b>: a new MoMo account needs the PIN, and the owner is alerted if someone else adds one.</li>
+</ol>
+<h3>6.5 Disputes</h3>
+<ol class="steps">
+<li><b>Disputes</b>, then the <b>Active</b> tab: Kofi's "rice bag torn" dispute with the answer-by date and the amount held from settlement.</li>
+<li>Tap <b>Refund</b> (PIN) to settle it, or <b>Explain</b> to send your side to SokoPay. If the shop doesn't answer within 7 days, SokoPay decides.</li>
+<li>The <b>Closed</b> tab shows outcomes.</li>
+</ol>
+<h3>6.6 The cashier's view</h3>
+<p>Sign in as <span class="who">Kwesi</span> <code>0200000302</code>. He can show the Counter QR, create payment requests and see payments. Balances, fees, refunds, settlements and disputes are hidden from the Cashier role.</p>
+
+<!-- ============================================================ 7. MERCHANT PORTAL -->
+<h2 style="margin-top:8mm">7. Merchant web portal: step by step</h2>
+<p>Open <code>http://127.0.0.1:8000/dashboard/</code>. Sign in as <span class="who">Grace</span> <code>+233200000301</code> / <b>SokoDemo#2026</b>, then the 2FA code (section 2.3).</p>
+<ol class="steps">
+<li><b>Home</b>: available balance and recent payments.</li>
+<li><b>Payments</b>: filter by status, then click a reference for the payment page. Refund from there (Owner or Finance).</li>
+<li><b>QR</b>: the counter QR and dynamic payment requests on screen.</li>
+<li><b>Links</b>: the two seeded links ("Weekly groceries box" for GH₵150 and "Pay any amount") with QR codes. Create a new one and open its URL in a browser (section 9).</li>
+<li><b>Bulk pay</b>: download the sample CSV, upload it, review valid and invalid rows, and approve. The money is reserved, each row is paid, and the results file shows each outcome.</li>
+<li><b>Settlements</b>: request and history.</li>
+<li><b>Disputes</b>: answer by refund or explanation. The amount held from settlement is shown.</li>
+<li><b>Webhooks</b>: add an https URL and choose events. The signing secret is shown once. Send test, view the delivery log, rotate the secret. Private and internal addresses are refused.</li>
+<li><b>Statements</b>: pick dates, then Download PDF or CSV.</li>
+<li><b>Developers</b> (API keys): create a <i>test</i> key. The secret is shown once. Use it in section 9.3.</li>
+<li><b>Security</b>: 2FA status and backup codes.</li>
+</ol>
+</div>
+
+<!-- ============================================================ 8. BACK OFFICE -->
+<div class="section">
+<h2>8. Staff back office: role by role</h2>
+<p>Every staff member signs in at <code>/dashboard/login/</code> with password <b>SokoDemo#2026</b> and a 2FA code. Each person sees only their role's menu. Pages for other roles return "Forbidden".</p>
+
+<h3>8.1 Admin (<span class="who">Abena</span> 0200000001)</h3>
+<ol class="steps">
+<li><b>Overview</b>: banners for stuck payouts, safeguarding and high AML alerts.</li>
+<li><b>Merchants</b>: <i>Kofi Electronics</i> is waiting. Open it, then <b>Begin review</b>, then <b>Approve</b> (choose a risk tier) or <b>Reject</b> with a reason. Each decision is in the audit log.</li>
+<li><b>Integrations</b>: every partner connector and what is still needed to go live.</li>
+</ol>
+
+<h3>8.2 Operations (<span class="who">Kwame</span> 0200000002, <span class="who">Efua</span> 0200000003)</h3>
+<ol class="steps">
+<li><b>Agents</b>: open <i>Yaw's Shop</i>, then <b>Activate agent</b>. Register a new agent from any existing SokoPay account.</li>
+<li>Open <i>Esi's Kiosk</i>: float, top-ups, recent transactions and cash-out requests. Record a float purchase against a bank reference.</li>
+<li><b>Float top-up approvals</b> (on the Agents page): the seeded GH₵5,000 top-up was recorded by Kwame. Sign in as <b>Efua</b> and approve it; Kwame can't approve his own. The float is credited and Esi is alerted.</li>
+<li><b>Cash-out monitor</b>: 24-hour counts and agents with many declines.</li>
+<li><b>Disputes</b>: Ama's "charged twice" case (the merchant has answered). Read both sides, write a reason, and decide. "Customer is right" refunds from the shop's balance; "Merchant is right" closes it.</li>
+<li>Go to <code>/dashboard/admin/withdrawals/</code>. Kofi's GH₵50 savings withdrawal is waiting. Enter the amount paid and the provider's reference, then <b>Credit wallet</b>.</li>
+<li><b>Support</b>: look up a customer (also available to support and compliance).</li>
+</ol>
+
+<h3>8.3 Compliance (<span class="who">Kojo</span> 0200000004, <span class="who">Akua</span> 0200000005)</h3>
+<ol class="steps">
+<li><b>Compliance</b>: the case list. Open Yaw's <b>PASS_THROUGH</b> case (high): evidence, the note, and the draft STR.</li>
+<li>Case actions: assign, add a note, escalate, <b>place a hold</b> (freezes the wallet), release, close with a reason, or prepare an STR.</li>
+<li>Reports: Kojo prepared the STR. Kojo <b>can't</b> approve it. Sign in as <b>Akua</b>, approve it, then mark it <b>filed</b> with an FIC reference. The case closes as reported.</li>
+<li><b>Screening</b>: confirm or clear name matches with a reason. <b>Watchlists</b>: upload UN, OFAC or custom lists.</li>
+<li>Reports: <b>export large transactions</b> as CSV (the export is audited).</li>
+<li><b>KYC</b>: tier counts and wallets on hold. Place a manual hold with a reason. Holds from an AML case can only be released from the case.</li>
+<li><b>Audit</b>: every privileged action, with who, what, when and request ID. Export CSV.</li>
+</ol>
+</div>
+
+<div class="section">
+<h3>8.4 Finance (<span class="who">Yaa</span> 0200000006, <span class="who">Nii</span> 0200000007)</h3>
+<ol class="steps">
+<li><b>Approvals</b>: Grace's <b>GH₵200 settlement</b> to an account changed today. Approve it (or reject with a reason). The payout goes to the partner. Finish it on the mock partner page (section 11, Paid or Refused). A refused payout returns to the shop's balance automatically.</li>
+<li><b>Prices</b>: fees and commissions in force, with an example on GH₵100. Yaa proposed a <b>1% cash-out fee</b>. Yaa can't approve it; sign in as <b>Nii</b> and approve. New cash-outs show the fee to the customer before approval.</li>
+<li><b>Recon</b>: yesterday's run with an amount mismatch, an "ours only" and a "theirs only" break. Open it and resolve each with a note (your name and the time are recorded).</li>
+<li><b>Safeguarding</b>: e-money owed to customers and agents against the trust account balance. Record a new statement balance and run the check. A shortfall raises an alarm.</li>
+<li><b>Returns</b>: pick a month for transactions, customers, e-money, agents, merchants, complaints and AML figures. Download CSV.</li>
+<li><b>Health</b>: live operational numbers (stuck payouts, failed payments, overdue disputes, safeguarding).</li>
+</ol>
+
+<h3>8.5 Support (<span class="who">Selorm</span> 0200000008)</h3>
+<ol class="steps">
+<li><b>Support</b>: search <code>0244000203</code> (Yaw), a wallet ID, or a payment reference (SP-…).</li>
+<li>You see name, wallet ID, balance, KYC tier, devices and 30 days of activity. If the wallet is on hold, support sees "refer to compliance" but <b>never the AML reason</b> (no tipping off).</li>
+<li><b>Sign out of all devices</b> for a customer who lost a phone (audited).</li>
+<li>Pages for other roles (Agents, Compliance, Recon) are forbidden for support.</li>
+</ol>
+
+<!-- ============================================================ 9. CHECKOUT -->
+<h2 style="margin-top:8mm">9. Online checkout, payment links and the API</h2>
+<h3>9.1 The shop's payment page</h3>
+<ol class="steps">
+<li>Open <code>http://127.0.0.1:8000/m/GRACEMTN</code>. This is what a phone camera opens when it scans the counter QR.</li>
+<li>Enter GH₵30, choose MTN, enter <code>0244000201</code>, then <b>Pay now</b>. The page says "Approve on your phone".</li>
+<li>On <code>/dev/mock-partner/</code>, click <b>Approve</b> on that SP- payment. The checkout page switches to <b>Payment received</b>, Grace's app gets "Payment received", and a webhook fires if one is set.</li>
+<li>The footer links to the privacy policy, terms and complaints.</li>
+</ol>
+<h3>9.2 Payment links</h3>
+<p>Copy a link from the portal's <b>Links</b> page (for example <code>/l/…</code>) and open it. A fixed-amount link can't be changed by the payer. Switch a link off, and it shows "no longer open".</p>
+<h3>9.3 Website checkout through the API (developers)</h3>
+<pre>curl -X POST http://127.0.0.1:8000/api/v1/merchant/checkout-sessions ^
+  -H "Authorization: Bearer sk_test_..." -H "Content-Type: application/json" ^
+  -d "{\"amount\": \"75.00\", \"reference\": \"ORDER-9\", \"success_url\": \"https://example.com/thanks\"}"</pre>
+<p>Open the returned <code>url</code>. Sessions from a <b>test</b> key never send a real prompt. Interactive API documentation is at <code>http://127.0.0.1:8000/api/docs/</code>.</p>
+</div>
+
+<!-- ============================================================ 10. USSD -->
+<div class="section">
+<h2>10. USSD for basic phones</h2>
+<p>A real network aggregator sends each screen to <code>/api/v1/ussd/callback</code>. In the demo, simulate it from PowerShell. Each call sends everything typed so far, joined by <code>*</code>:</p>
+<pre>function ussd($text) { (Invoke-WebRequest -Method Post http://127.0.0.1:8000/api/v1/ussd/callback `
+  -Body @{sessionId="demo1"; serviceCode="*713#"; phoneNumber="+233244000201"; text=$text}).Content }
+ussd ""            # CON SokoPay  1 Check balance  2 Send ...  4 Cash out at agent ...
+ussd "1"           # CON Enter your PIN
+ussd "1*428173"    # END Your SokoPay balance is GHS ...</pre>
+<ol class="steps">
+<li><b>Send:</b> new session (change <code>sessionId</code>), then <code>2</code>, then <code>2*0244000202</code> ("Send to Ama S."), then <code>2*0244000202*10</code>, then <code>2*0244000202*10*428173</code>.</li>
+<li><b>Cash out without a smartphone:</b> option <code>4</code> opens the cash-out window. After the agent sends the request, dial again: <code>4</code> shows "Esi's Kiosk wants to pay you GHS …". Enter the PIN to approve, or 0 to decline.</li>
+<li>Other options: airtime (3), mini statement (5), wallet ID (6).</li>
+</ol>
+
+<!-- ============================================================ 11. MOCK PARTNER -->
+<h2 style="margin-top:8mm">11. The mock partner (demo only)</h2>
+<p>In real use, a customer approves a MoMo prompt on their phone, and the payment partner (Korba or Nsano) confirms payouts. In the demo, <code>http://127.0.0.1:8000/dev/mock-partner/</code> plays both:</p>
+<table>
+<tr><th>Section</th><th>Buttons</th><th>Effect</th></tr>
+<tr><td>MoMo prompts waiting for the customer</td><td>Approve / Decline</td><td>Completes or fails the payment, exactly as a real approval would (ledger, receipt, alerts, webhooks).</td></tr>
+<tr><td>Settlement payouts</td><td>Paid / Refused</td><td>Paid closes the settlement. Refused returns the money to the shop's balance.</td></tr>
+<tr><td>MoMo refunds</td><td>Paid / Refused</td><td>Same pattern for refunds of MoMo payments.</td></tr>
+<tr><td>Cross-border sends</td><td>Delivered / Refused</td><td>Delivered settles; Refused refunds the customer's wallet.</td></tr>
+</table>
+<div class="note">This page only exists when the server runs in development with mock integrations. Production refuses mock integrations, so it can't appear there.</div>
+</div>
+
+<!-- ============================================================ 12. SCENARIOS -->
+<div class="section">
+<h2>12. End-to-end scenarios</h2>
+<div class="grid2">
+<div class="card"><h4>A. A day at the shop</h4><ol>
+<li>Grace creates a GH₵45 request.</li>
+<li>Kofi scans and pays from his wallet.</li>
+<li>Grace sees Paid; the cashier is alerted.</li>
+<li>Ama pays GH₵30 on <code>/m/GRACEMTN</code> by MoMo; approve on the mock partner.</li>
+<li>Grace refunds GH₵5 to Kofi.</li>
+<li>Grace settles; Nii approves; the mock partner marks it Paid.</li>
+<li>Grace downloads the statement.</li></ol></div>
+<div class="card"><h4>B. Cash at the agent</h4><ol>
+<li>Yaw brings GH₵100; Esi cashes in.</li>
+<li>Kofi allows cash out; Esi requests GH₵50.</li>
+<li>Kofi approves with the PIN; Esi hands over cash.</li>
+<li>Esi buys float: Kwame records it, Efua approves.</li>
+<li>Commission appears on Esi's home screen.</li></ol></div>
+<div class="card"><h4>C. A customer complaint</h4><ol>
+<li>Kofi reports a problem on a shop payment.</li>
+<li>The amount is held from the shop's settlement.</li>
+<li>Grace explains in the app.</li>
+<li>Kwame decides (customer or merchant) with a reason.</li>
+<li>Both are notified; the audit log records it.</li></ol></div>
+<div class="card"><h4>D. Suspicious activity</h4><ol>
+<li>Kojo reviews Yaw's case and places a hold.</li>
+<li>Selorm (support) sees "on hold" with no reason.</li>
+<li>Kojo's STR is approved by Akua and filed with an FIC reference.</li>
+<li>Abena reviews it all in the Audit log.</li></ol></div>
+<div class="card"><h4>E. Prices change</h4><ol>
+<li>Yaa proposes the 1% cash-out fee.</li>
+<li>Nii approves.</li>
+<li>Kofi's next cash-out shows the fee before he approves.</li>
+<li>The fee is visible in Returns and the ledger.</li></ol></div>
+<div class="card"><h4>F. No smartphone</h4><ol>
+<li>Kofi checks his balance and sends GH₵10 by USSD.</li>
+<li>He opens cash out (4); Esi requests.</li>
+<li>Kofi dials again and approves with the PIN.</li></ol></div>
+</div>
+
+<!-- ============================================================ 13. RESET -->
+<h2 style="margin-top:8mm">13. Resetting and troubleshooting</h2>
+<table>
+<tr><th style="width:34%">Situation</th><th>What to do</th></tr>
+<tr><td>Start the demo again from scratch</td><td>Stop the server (Ctrl+C) and run <code>scripts\demo.ps1</code> again. It deletes <code>demo.sqlite3</code> and reloads everything.</td></tr>
+<tr><td>"Demo data is already loaded"</td><td>The seed only runs on an empty database. Use the script, which starts fresh.</td></tr>
+<tr><td>No sign-in code arrives</td><td>Look in the server window for <code>[SMS:console]</code>. Codes expire after a few minutes, and too many requests are rate-limited.</td></tr>
+<tr><td>App says it can't connect</td><td>Use an Android emulator (the apps call <code>10.0.2.2:8000</code>). Check the server is running and the script set <code>ALLOWED_HOSTS</code>.</td></tr>
+<tr><td>2FA code rejected</td><td>Check the computer clock. Generate a fresh code (codes last 30 seconds). Five wrong codes lock for 15 minutes.</td></tr>
+<tr><td>"Account is temporarily locked"</td><td>Five wrong PINs lock the account for a few minutes (security feature).</td></tr>
+<tr><td>A payment stays "pending"</td><td>Approve or decline it on the mock partner page (section 11).</td></tr>
+<tr><td>Feature says "not available yet"</td><td>The licence gate: the demo script runs with DEMI. Outside the script, set <code>SOKOPAY_ACTIVE_LICENCE=DEMI</code>.</td></tr>
+</table>
+<p class="muted" style="margin-top:6mm">Source files: <code>backend/apps/common/management/commands/seed_demo.py</code> (demo data), <code>backend/scripts/demo.ps1</code> (demo server), <code>docs/demo-guide/guide.html</code> (this guide).</p>
+</div>
+</body>
+</html>

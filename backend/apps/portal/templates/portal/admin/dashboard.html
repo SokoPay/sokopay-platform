@@ -1,0 +1,41 @@
+{% extends "portal/base.html" %}
+{% block title %}Admin · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-6">Back-office overview</h1>
+
+{% if aml_high_open %}
+<a href="{% url 'portal:compliance' %}?severity=high" class="block bg-red-100 text-danger rounded-md px-4 py-3 text-sm mb-4">
+  {{ aml_high_open }} high-severity fraud/AML alert{{ aml_high_open|pluralize }} open — compliance review needed.
+</a>
+{% endif %}
+{% if payouts_stuck %}
+<a href="{% url 'portal:settlement_queue' %}#stuck" class="block bg-red-100 text-danger rounded-md px-4 py-3 text-sm mb-4">
+  {{ payouts_stuck }} settlement payout{{ payouts_stuck|pluralize }} stuck with the payment partner — investigate.
+</a>
+{% endif %}
+<div class="grid sm:grid-cols-3 gap-4 mb-8">
+  <a href="{% url 'portal:merchant_queue' %}" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+    <div class="text-sm text-ink/60">Merchants awaiting review</div>
+    <div class="text-3xl font-semibold mt-1">{{ pending_review }}</div>
+  </a>
+  <a href="{% url 'portal:settlement_queue' %}" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+    <div class="text-sm text-ink/60">Settlements awaiting approval</div>
+    <div class="text-3xl font-semibold mt-1">{{ settlements_awaiting }}</div>
+  </a>
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">Approved merchants</div>
+    <div class="text-3xl font-semibold mt-1">{{ merchant_counts.approved|default:0 }}</div>
+  </div>
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm p-5">
+  <h2 class="font-medium mb-3">Merchants by status</h2>
+  <ul class="text-sm grid sm:grid-cols-3 gap-2">
+    {% for status, n in merchant_counts.items %}
+    <li class="flex justify-between border border-gray-100 rounded-md px-3 py-2">
+      <span class="capitalize">{{ status }}</span><span class="font-semibold">{{ n }}</span>
+    </li>
+    {% empty %}<li class="text-ink/40">No merchants yet.</li>{% endfor %}
+  </ul>
+</div>
+{% endblock %}

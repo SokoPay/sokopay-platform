@@ -1,0 +1,29 @@
+{% extends "portal/base.html" %}
+{% block title %}Watchlists · Compliance{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Sanctions &amp; PEP lists</h1>
+<p class="text-sm text-ink/60 mb-4">Download the official files (UN: scsanctions.un.org · OFAC: treasury.gov) and upload them here. An upload replaces that list and rescreens every customer.</p>
+{% include "portal/admin/_compliance_nav.html" %}
+
+<div class="grid md:grid-cols-2 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm">
+    <h2 class="font-medium mb-2">Loaded</h2>
+    <ul class="divide-y divide-gray-50">{% for label, n in loaded %}<li class="py-1 flex justify-between"><span>{{ label }}</span><span class="tabular-nums">{{ n }}</span></li>{% endfor %}</ul>
+  </div>
+  <form method="post" enctype="multipart/form-data" hx-boost="false" class="bg-surface rounded-lg shadow-sm p-4 space-y-2 text-sm">{% csrf_token %}
+    <h2 class="font-medium">Upload a list</h2>
+    <select name="source" class="w-full border border-gray-200 rounded-md px-3 py-2">{% for value, label in sources %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>
+    <select name="format" class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <option value="un_xml">UN consolidated XML</option><option value="ofac_csv">OFAC SDN CSV</option><option value="csv">CSV: name, aliases, dob, nationality, reference, kind</option>
+    </select>
+    <input type="file" name="file" required class="block w-full">
+    <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Import and rescreen</button>
+  </form>
+</div>
+
+<h2 class="font-medium mt-6 mb-2">Recent imports</h2>
+<div class="bg-surface rounded-lg shadow-sm"><table class="w-full text-sm"><tbody>
+  {% for i in imports %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ i.created_at|date:"d M Y H:i" }}</td><td>{{ i.get_source_display }}</td><td>{{ i.filename }}</td><td class="text-right tabular-nums">{{ i.entries }}</td><td class="px-4">{{ i.imported_by.full_name|default:"command line" }}</td></tr>
+  {% empty %}<tr><td class="px-4 py-6 text-center text-ink/40">No lists loaded yet — screening has nothing to compare against.</td></tr>{% endfor %}
+</tbody></table></div>
+{% endblock %}

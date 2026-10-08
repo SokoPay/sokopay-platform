@@ -1,0 +1,40 @@
+{% extends "checkout/base.html" %}
+{% block title %}Approve on your phone{% endblock %}
+{% block content %}
+<div class="bg-surface rounded-xl shadow-sm p-5 text-center" id="box" data-status-url="/checkout/status/{{ p.reference }}" data-success-url="{{ success_url }}">
+  <div id="pending">
+    <div class="text-4xl">📱</div>
+    <h1 class="text-xl font-semibold mt-2">Approve on your phone</h1>
+    <p class="text-sm text-ink/60 mt-2">We sent a prompt to {{ payer }} for {{ amount_display }} to {{ shop }}. Enter your mobile money PIN on your phone to approve.</p>
+    <p class="text-xs text-ink/40 mt-4">This page updates by itself. Reference <span class="font-mono">{{ p.reference }}</span></p>
+  </div>
+  <div id="paid" class="hidden">
+    <div class="text-4xl text-success">✓</div>
+    <h1 class="text-xl font-semibold mt-2">Payment received</h1>
+    <p class="text-sm text-ink/60 mt-2">{{ amount_display }} paid to {{ shop }}. Reference <span class="font-mono">{{ p.reference }}</span></p>
+    {% if success_url %}<a href="{{ success_url }}" class="inline-block mt-4 bg-orange text-white rounded-md px-4 py-2">Back to {{ shop }}</a>{% endif %}
+  </div>
+  <div id="failed" class="hidden">
+    <h1 class="text-xl font-semibold mt-2 text-danger">Payment didn't go through</h1>
+    <p class="text-sm text-ink/60 mt-2">It was declined or not approved in time. No money was taken.</p>
+    <a href="javascript:history.back()" class="inline-block mt-4 border border-ink/20 rounded-md px-4 py-2">Try again</a>
+    {% if cancel_url %}<a href="{{ cancel_url }}" class="inline-block mt-4 ml-2 text-ink/60">Back to {{ shop }}</a>{% endif %}
+  </div>
+</div>
+<script>
+(function () {
+  var box = document.getElementById("box");
+  var url = box.dataset.statusUrl, tries = 0;
+  function show(id) { ["pending", "paid", "failed"].forEach(function (x) { document.getElementById(x).classList.toggle("hidden", x !== id); }); }
+  function poll() {
+    tries++;
+    fetch(url, {headers: {"Accept": "application/json"}}).then(function (r) { return r.json(); }).then(function (d) {
+      if (d.status === "succeeded") { show("paid"); if (box.dataset.successUrl) setTimeout(function () { location.href = box.dataset.successUrl; }, 2500); }
+      else if (d.status === "failed") { show("failed"); }
+      else if (tries < 100) { setTimeout(poll, 3000); }
+    }).catch(function () { if (tries < 100) setTimeout(poll, 5000); });
+  }
+  poll();
+})();
+</script>
+{% endblock %}

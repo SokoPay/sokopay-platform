@@ -1,0 +1,25 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Disputes · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Disputes</h1>
+<p class="text-sm text-ink/60 mb-4">Customers who say something went wrong with a payment. Refund them, or explain your side and SokoPay will decide. {% if held %}<b>{{ held|ghs }}</b> is held from settlement until these are resolved.{% endif %}</p>
+<div class="space-y-3 mb-8">
+{% for d in active %}
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm">
+    <div class="flex flex-wrap justify-between gap-2"><div><b>{{ d.get_reason_display }}</b> · <a class="font-mono text-orange" href="{% url 'portal:payment_detail' d.payment.reference %}">{{ d.payment.reference }}</a> · {{ d.amount_minor|ghs }}</div>
+      <div class="{% if d.status == 'open' %}text-warning{% endif %}">{{ d.get_status_display }}{% if d.status == 'open' %} · answer by {{ d.respond_by|date:"d M Y" }}{% endif %}</div></div>
+    <p class="mt-2 text-ink/80">“{{ d.description }}”</p>
+    {% if d.merchant_response %}<p class="mt-2 text-ink/60">Your answer: {{ d.merchant_response }}</p>{% endif %}
+    {% if d.status == 'open' and can_answer %}
+    <form method="post" class="mt-3 flex flex-wrap gap-2">{% csrf_token %}<input type="hidden" name="dispute" value="{{ d.pk }}">
+      <input name="response" placeholder="Your answer (required to explain)" class="flex-1 min-w-[16rem] border border-gray-200 rounded-md px-3 py-2">
+      <button name="action" value="refund" class="bg-orange text-white rounded-md px-3 py-2" onclick="return confirm('Refund {{ d.amount_minor|ghs }} to the customer?')">Refund customer</button>
+      <button name="action" value="explain" class="border border-ink/20 rounded-md px-3 py-2">Send explanation</button>
+    </form>{% endif %}
+  </div>
+{% empty %}<div class="bg-surface rounded-lg shadow-sm p-6 text-center text-ink/40 text-sm">No open disputes.</div>{% endfor %}
+</div>
+<h2 class="font-medium mb-2">Closed</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm"><tbody>{% for d in closed %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ d.updated_at|date:"d M Y" }}</td><td class="font-mono text-xs">{{ d.payment.reference }}</td><td>{{ d.amount_minor|ghs }}</td><td>{{ d.get_status_display }}</td><td class="text-xs text-ink/50">{{ d.decision_note }}</td></tr>{% empty %}<tr><td class="px-4 py-4 text-ink/40">None.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

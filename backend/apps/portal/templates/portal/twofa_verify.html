@@ -1,0 +1,17 @@
+{% extends "portal/base.html" %}
+{% block title %}Two-factor · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-16">
+  <h1 class="text-xl font-semibold mb-2">Enter your 2FA code</h1>
+  <p class="text-sm text-ink/60 mb-6">Open your authenticator app and enter the current 6-digit code.</p>
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-6 space-y-3">
+    {% csrf_token %}
+    <input name="token" autocomplete="one-time-code" maxlength="12" placeholder="123456" autofocus
+           class="w-full text-center text-2xl tracking-widest border border-gray-200 rounded-md px-3 py-2">
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Verify</button>
+  </form>
+  <p class="text-xs text-ink/50 mt-4">Lost your phone? Enter one of your backup codes (like <span class="font-mono">7KQ2M-X9D4T</span>) instead.
+    No backup codes? Contact SokoPay support — we'll verify who you are before resetting 2FA.</p>
+  <p class="text-xs text-ink/40 mt-4 text-center"><a href="{% url 'portal:logout' %}" class="underline">Sign out</a></p>
+</div>
+{% endblock %}

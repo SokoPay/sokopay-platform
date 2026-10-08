@@ -1,0 +1,50 @@
+{% extends "portal/base.html" %}
+{% block title %}Compliance · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Fraud &amp; AML</h1>
+<p class="text-sm text-ink/60 mb-4">Never tell a customer about an alert or a report (tipping-off is an offence).</p>
+{% include "portal/admin/_compliance_nav.html" %}
+
+<div class="grid sm:grid-cols-4 gap-3 mb-5">
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Open — high</div><div class="text-2xl font-semibold text-danger">{{ counts.high }}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Open — medium</div><div class="text-2xl font-semibold text-warning">{{ counts.medium }}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Open — low</div><div class="text-2xl font-semibold">{{ counts.low }}</div></div>
+  <a href="{% url 'portal:compliance_screening' %}" class="bg-surface rounded-lg shadow-sm p-4 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/50">Screening matches to review</div><div class="text-2xl font-semibold">{{ pending_matches }}</div></a>
+</div>
+
+<form method="get" class="flex flex-wrap gap-2 mb-3 text-sm">
+  <select name="status" class="border border-gray-200 rounded-md px-2 py-1">
+    <option value="open" {% if status == 'open' %}selected{% endif %}>Open</option>
+    <option value="escalated" {% if status == 'escalated' %}selected{% endif %}>Escalated</option>
+    <option value="closed_no_action" {% if status == 'closed_no_action' %}selected{% endif %}>Closed — no action</option>
+    <option value="closed_reported" {% if status == 'closed_reported' %}selected{% endif %}>Closed — reported</option>
+  </select>
+  <select name="severity" class="border border-gray-200 rounded-md px-2 py-1">
+    <option value="">Any severity</option><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option>
+  </select>
+  <select name="rule" class="border border-gray-200 rounded-md px-2 py-1">
+    <option value="">Any rule</option>{% for r in rules %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+  </select>
+  <button class="border border-ink/20 hover:border-orange rounded-md px-3 py-1">Filter</button>
+</form>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Severity</th><th>Rule</th><th>Subject</th><th class="text-right">Hits</th><th>Last seen</th><th>Status</th><th>Assigned</th><th></th></tr></thead>
+    <tbody>
+      {% for a in alerts %}
+      <tr class="border-t border-gray-50">
+        <td class="px-4 py-2"><span class="px-2 py-0.5 rounded-full text-xs font-medium {% if a.severity == 'high' %}bg-red-100 text-danger{% elif a.severity == 'medium' %}bg-amber-100 text-warning{% else %}bg-gray-100{% endif %}">{{ a.severity }}</span></td>
+        <td class="font-mono text-xs">{{ a.rule }}<div class="font-sans text-ink/50">{{ a.title }}</div></td>
+        <td>{{ a.get_subject_kind_display }} · {{ a.subject_label }}</td>
+        <td class="text-right tabular-nums">{{ a.hits }}</td>
+        <td>{{ a.last_seen|date:"d M, H:i" }}</td>
+        <td>{{ a.get_status_display }}</td>
+        <td>{{ a.assigned_to.full_name|default:"—" }}</td>
+        <td class="px-4 text-right"><a class="text-orange" href="{% url 'portal:compliance_alert' a.pk %}">Open</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="8" class="px-4 py-8 text-center text-ink/40">No alerts.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

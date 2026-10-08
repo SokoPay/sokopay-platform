@@ -1,0 +1,15 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Recon {{ run.date }} · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:ops_recon' %}" class="text-sm text-ink/60 hover:text-orange">← Reconciliation</a>
+<h1 class="text-xl font-semibold mt-2 mb-4">{{ run.rail }} · {{ run.date }}</h1>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Break</th><th>Reference</th><th class="text-right">Ours</th><th class="text-right">Theirs</th><th class="px-4">Resolution</th></tr></thead>
+  <tbody>{% for i in items %}<tr class="border-t border-gray-50 {% if i.resolved %}opacity-60{% endif %}"><td class="px-4 py-2">{{ i.get_kind_display }}</td><td class="font-mono text-xs">{{ i.rail_ref }}</td>
+    <td class="text-right tabular-nums">{% if i.ours_minor is not None %}{{ i.ours_minor|ghs }}{% else %}—{% endif %}</td>
+    <td class="text-right tabular-nums">{% if i.theirs_minor is not None %}{{ i.theirs_minor|ghs }}{% else %}—{% endif %}</td>
+    <td class="px-4">{% if i.resolved %}{{ i.note }} <span class="text-xs text-ink/50">— {{ i.resolved_by.full_name }}, {{ i.resolved_at|date:"d M H:i" }}</span>{% else %}
+      <form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="item" value="{{ i.pk }}"><input name="note" required placeholder="What happened / what was done" class="flex-1 border border-gray-200 rounded-md px-2 py-1"><button class="border border-ink/20 rounded-md px-3 py-1">Resolve</button></form>{% endif %}</td></tr>
+  {% empty %}<tr><td colspan="5" class="px-4 py-8 text-center text-ink/40">No breaks. Everything matched.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

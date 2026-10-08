@@ -1,0 +1,26 @@
+{% extends "portal/base.html" %}
+{% block title %}Customer support · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Customer lookup</h1>
+<form method="get" class="flex gap-2 mb-5"><input name="q" value="{{ q }}" autofocus placeholder="Phone, wallet ID or payment reference (SP-…)" class="flex-1 border border-gray-200 rounded-md px-3 py-2"><button class="bg-orange text-white rounded-md px-4">Search</button></form>
+{% if error %}<div class="text-danger text-sm mb-4">{{ error }}</div>{% endif %}
+{% if u %}
+<div class="grid md:grid-cols-3 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-4 text-sm space-y-1">
+    <div class="text-lg font-semibold">{{ u.full_name|default:"(no name)" }}</div>
+    <div>{{ u.phone }}</div><div>Wallet ID {{ wallet_id }}</div>
+    <div>Balance <span class="font-semibold">{{ balance }}</span></div>
+    <div>KYC: {{ kyc.get_tier_display }}</div>
+    <div>Joined {{ u.created_at|date:"d M Y" }}{% if u.closed_at %} · <span class="text-danger">closed {{ u.closed_at|date:"d M Y" }}</span>{% endif %}</div>
+    {% if kyc.frozen %}<div class="bg-red-50 text-danger rounded p-2 mt-2">Wallet on hold. Refer the customer to Compliance and do not speculate about why.</div>{% endif %}
+    {% if u.pin_reset_at %}<div class="text-xs text-ink/50">PIN last reset {{ u.pin_reset_at|date:"d M Y H:i" }}</div>{% endif %}
+    <form method="post" action="?q={{ q|urlencode }}" class="pt-3">{% csrf_token %}<input type="hidden" name="action" value="logout_all"><button class="w-full border border-ink/20 hover:border-danger rounded-md py-2">Sign out of all devices</button></form>
+    <h3 class="font-medium pt-3">Devices</h3>
+    <ul class="text-xs">{% for d in devices %}<li>{{ d.get_app_display }} · {{ d.get_platform_display }} · {{ d.created_at|date:"d M Y" }}{% if not d.active %} (inactive){% endif %}</li>{% empty %}<li class="text-ink/40">None</li>{% endfor %}</ul>
+  </div>
+  <div class="md:col-span-2 bg-surface rounded-lg shadow-sm p-4 overflow-x-auto"><h2 class="font-medium mb-2">Last 30 days</h2>
+    <table class="w-full text-xs"><tbody>{% for t in activity %}<tr class="border-t border-gray-50"><td class="py-1">{{ t.created_at|slice:":16" }}</td><td>{{ t.title }}</td><td>{{ t.subtitle }}</td><td class="text-right">{{ t.amount_display }}</td><td>{{ t.status }}</td><td class="font-mono">{{ t.reference }}</td></tr>{% empty %}<tr><td class="py-2 text-ink/40">No activity.</td></tr>{% endfor %}</tbody></table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

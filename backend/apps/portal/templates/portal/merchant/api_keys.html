@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+{% block title %}API keys · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Developer · API keys</h1>
+
+{% if new_secret %}
+<div class="bg-ink text-white rounded-lg p-4 mb-4" x-data="{copied:false}">
+  <p class="text-sm mb-2">Copy this key now — it will not be shown again.</p>
+  <div class="flex items-center gap-2">
+    <code class="font-mono text-sm break-all">{{ new_secret }}</code>
+    <button class="text-xs bg-orange px-2 py-1 rounded"
+            @click="navigator.clipboard.writeText('{{ new_secret }}'); copied=true"
+            x-text="copied ? 'Copied' : 'Copy'"></button>
+  </div>
+</div>
+{% endif %}
+
+<form method="post" class="mb-6 flex items-center gap-2">
+  {% csrf_token %}
+  <select name="mode" class="border border-gray-200 rounded-md px-3 py-2 text-sm">
+    <option value="test">Test</option>
+    <option value="live">Live</option>
+  </select>
+  <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2 text-sm">
+    Create key
+  </button>
+</form>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">Prefix</th><th>Mode</th><th>Created</th><th>Last used</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for k in keys %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2 font-mono text-xs">{{ k.prefix }}…</td>
+        <td class="uppercase">{{ k.mode }}</td>
+        <td>{{ k.created_at|date:"d M Y" }}</td>
+        <td>{{ k.last_used_at|date:"d M Y, H:i"|default:"—" }}</td>
+        <td class="px-5 text-right">
+          {% if k.revoked_at %}
+            <span class="text-xs text-ink/40">revoked</span>
+          {% else %}
+            <form method="post" onsubmit="return confirm('Revoke this key?')">
+              {% csrf_token %}
+              <button name="revoke" value="{{ k.id }}" class="text-xs text-danger hover:underline">Revoke</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-ink/40">No keys yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

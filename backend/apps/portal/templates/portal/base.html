@@ -1,0 +1,84 @@
+{% load humanize %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}SokoPay{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // SokoPay brand tokens (see docs/03-Design-System / art direction).
+    tailwind.config = {
+      theme: { extend: { colors: {
+        ink: "#231F20", orange: { DEFAULT: "#F26522", dark: "#D4541A" },
+        surface: "#FFFFFF", bg: "#F7F5F4", success: "#1E8E3E",
+        warning: "#B26A00", danger: "#C62828",
+      } } }
+    };
+  </script>
+  <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+</head>
+<body hx-boost="true" class="bg-bg text-ink min-h-screen">
+  {% if environment_banner %}<div style="background:#B26A00;color:#fff;text-align:center;font:600 12px/1.6 system-ui,sans-serif;padding:3px 8px">{{ environment_banner }}</div>{% endif %}
+
+{% if user.is_authenticated %}
+  {% with staff=user.user_type|default:"" %}
+  <header class="bg-ink text-white">
+    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="{% if staff == 'staff' %}{% url 'portal:admin_dashboard' %}{% else %}{% url 'portal:dashboard' %}{% endif %}"
+         class="font-bold tracking-wide">SOKO<span class="text-orange">PAY</span></a>
+      <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        {% if staff == 'staff' %}
+          <a href="{% url 'portal:admin_dashboard' %}" class="hover:text-orange">Overview</a>
+          <a href="{% url 'portal:merchant_queue' %}" class="hover:text-orange">Merchants</a>
+          <a href="{% url 'portal:settlement_queue' %}" class="hover:text-orange">Approvals</a>
+          <a href="{% url 'portal:safeguarding' %}" class="hover:text-orange">Safeguarding</a>
+          {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_agents' %}" class="hover:text-orange">Agents</a>
+          <a href="{% url 'portal:ops_disputes' %}" class="hover:text-orange">Disputes</a>{% endif %}
+          {% if 'compliance' in staff_roles %}<a href="{% url 'portal:compliance' %}" class="hover:text-orange">Compliance</a>
+          <a href="{% url 'portal:ops_kyc' %}" class="hover:text-orange">KYC</a>{% endif %}
+          {% if 'finance' in staff_roles %}<a href="{% url 'portal:ops_recon' %}" class="hover:text-orange">Recon</a>
+          <a href="{% url 'portal:ops_pricing' %}" class="hover:text-orange">Prices</a>{% endif %}
+          {% if 'finance' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:ops_regulatory' %}" class="hover:text-orange">Returns</a>{% endif %}
+          {% if 'support' in staff_roles or 'compliance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:ops_support' %}" class="hover:text-orange">Support</a>{% endif %}
+          <a href="{% url 'portal:integrations' %}" class="hover:text-orange">Integrations</a>
+          {% if staff_roles %}<a href="{% url 'portal:ops_health' %}" class="hover:text-orange">Health</a>{% endif %}
+          {% if 'compliance' in staff_roles or 'finance' in staff_roles %}<a href="{% url 'portal:ops_audit' %}" class="hover:text-orange">Audit</a>{% endif %}
+        {% else %}
+          <a href="{% url 'portal:dashboard' %}" class="hover:text-orange">Home</a>
+          <a href="{% url 'portal:payments' %}" class="hover:text-orange">Payments</a>
+          <a href="{% url 'portal:qr' %}" class="hover:text-orange">QR</a>
+          <a href="{% url 'portal:payment_links' %}" class="hover:text-orange">Links</a>
+          <a href="{% url 'portal:bulk' %}" class="hover:text-orange">Bulk pay</a>
+          <a href="{% url 'portal:settlements' %}" class="hover:text-orange">Settlements</a>
+          <a href="{% url 'portal:disputes' %}" class="hover:text-orange">Disputes</a>
+          <a href="{% url 'portal:webhooks' %}" class="hover:text-orange">Webhooks</a>
+          <a href="{% url 'portal:statements' %}" class="hover:text-orange">Statements</a>
+          <a href="{% url 'portal:api_keys' %}" class="hover:text-orange">Developers</a>
+        {% endif %}
+        <a href="{% url 'portal:security' %}" class="hover:text-orange">Security</a>
+        <span class="opacity-60">{{ user.full_name|default:user.phone }}</span>
+        <a href="{% url 'portal:logout' %}" class="px-3 py-1 rounded-md bg-orange hover:bg-orange-dark">Sign out</a>
+      </nav>
+    </div>
+  </header>
+  {% endwith %}
+{% endif %}
+
+<main class="max-w-6xl mx-auto px-4 py-6">
+  {% if messages %}
+    <div class="space-y-2 mb-4">
+      {% for m in messages %}
+        <div class="px-4 py-2 rounded-md text-sm
+          {% if m.tags == 'error' %}bg-red-100 text-danger
+          {% elif m.tags == 'success' %}bg-green-100 text-success
+          {% else %}bg-amber-100 text-warning{% endif %}">{{ m }}</div>
+      {% endfor %}
+    </div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</main>
+  <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-ink/40 space-x-3"><a href="/legal/privacy-policy" class="hover:text-orange">Privacy</a><a href="/legal/merchant-terms" class="hover:text-orange">Merchant terms</a><a href="/legal/acceptable-use" class="hover:text-orange">Acceptable use</a><a href="/legal/complaints-and-disputes" class="hover:text-orange">Complaints</a></footer>
+</body>
+</html>

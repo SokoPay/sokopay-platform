@@ -1,0 +1,34 @@
+{% extends "checkout/base.html" %}
+{% block title %}Pay {{ shop }}{% endblock %}
+{% block content %}
+<div class="bg-surface rounded-xl shadow-sm p-5">
+  <div class="text-sm text-ink/50">Paying</div>
+  <h1 class="text-xl font-semibold">{{ shop }}</h1>
+  {% if t.title %}<div class="mt-1">{{ t.title }}</div>{% endif %}
+  {% if t.description %}<div class="text-sm text-ink/60 mt-1">{{ t.description }}</div>{% endif %}
+  {% if amount_display %}<div class="text-3xl font-bold mt-4">{{ amount_display }}</div>{% endif %}
+
+  {% if not t.open %}
+    <div class="mt-5 bg-amber-50 rounded-md p-3 text-sm">This payment page is no longer open. Ask {{ shop }} for a new link.</div>
+  {% else %}
+  {% if error %}<div class="mt-4 bg-red-50 text-danger rounded-md p-3 text-sm">{{ error }}</div>{% endif %}
+  <form method="post" class="mt-5 space-y-3">{% csrf_token %}
+    {% if not amount_display %}
+    <label class="block text-sm">Amount (GH&#8373;)
+      <input name="amount" inputmode="decimal" required class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2" placeholder="0.00"></label>
+    {% endif %}
+    <label class="block text-sm">Mobile money network
+      <select name="network" required class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2">
+        {% for code, label in networks.items %}<option value="{{ code }}">{{ label }}</option>{% endfor %}
+      </select></label>
+    <label class="block text-sm">Your mobile money number
+      <input name="phone" inputmode="tel" required class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2" placeholder="024 123 4567"></label>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-3 font-semibold">Pay now</button>
+    <p class="text-xs text-ink/50">You'll get a prompt on your phone. Approve it with your mobile money PIN to finish.</p>
+  </form>
+  {% if app_code %}
+  <div class="mt-5 border-t border-gray-100 pt-4 text-sm text-ink/60">Have the SokoPay app? Scan the shop's QR or enter merchant code <b class="font-mono">{{ app_code }}</b>.</div>
+  {% endif %}
+  {% endif %}
+</div>
+{% endblock %}

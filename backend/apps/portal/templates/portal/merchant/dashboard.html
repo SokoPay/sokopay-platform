@@ -1,0 +1,52 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Home · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">{{ merchant.trading_name|default:merchant.legal_name }}</h1>
+<p class="text-sm text-ink/60 mb-6 capitalize">Status: {{ merchant.get_status_display }}</p>
+
+<div class="grid sm:grid-cols-2 gap-4 mb-8">
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">Available for settlement</div>
+    <div class="text-3xl font-semibold mt-1 tabular-nums">{{ available_display }}</div>
+    <a href="{% url 'portal:settlements' %}"
+       class="inline-block mt-3 text-sm bg-orange hover:bg-orange-dark text-white rounded-md px-3 py-1.5">
+      Settle / manage
+    </a>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5">
+    <div class="text-sm text-ink/60">Take a payment</div>
+    <p class="text-sm mt-1">Use your API keys to create charges from your own systems.</p>
+    <a href="{% url 'portal:api_keys' %}"
+       class="inline-block mt-3 text-sm border border-ink/20 rounded-md px-3 py-1.5 hover:border-orange">
+      API keys
+    </a>
+  </div>
+</div>
+
+<div class="bg-surface rounded-lg shadow-sm">
+  <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+    <h2 class="font-medium">Recent payments</h2>
+    <a href="{% url 'portal:payments' %}" class="text-sm text-orange">View all</a>
+  </div>
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left">
+      <tr><th class="px-5 py-2">Reference</th><th>When</th><th>Network</th>
+          <th class="text-right px-5">Amount</th><th class="px-5">Status</th></tr>
+    </thead>
+    <tbody>
+      {% for p in recent %}
+      <tr class="border-t border-gray-50">
+        <td class="px-5 py-2 font-mono text-xs">{{ p.reference }}</td>
+        <td>{{ p.created_at|date:"d M, H:i" }}</td>
+        <td class="uppercase">{{ p.network }}</td>
+        <td class="text-right px-5 tabular-nums">{{ p.amount_minor|ghs }}</td>
+        <td class="px-5">{% include "portal/_status_pill.html" with status=p.status %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="px-5 py-8 text-center text-ink/40">No payments yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

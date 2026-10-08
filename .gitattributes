@@ -1,0 +1,14 @@
+# Files that run on Linux servers/containers must keep Unix line endings, even when the
+# repository is checked out on Windows (core.autocrlf would otherwise break them).
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+Caddyfile       text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+.env.example    text eol=lf
+*.tf            text eol=lf
+*.py            text eol=lf
+# Binary assets
+*.png           binary
+*.pdf           binary
+*.apk           binary
