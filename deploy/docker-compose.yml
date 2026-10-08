@@ -1,14 +1,21 @@
-# SokoPay on a single server (DigitalOcean droplet): production-style stack for a pilot
-# test. See docs/DEPLOY-DIGITALOCEAN.md.
+# SokoPay on a DigitalOcean droplet, as its own isolated project (it can share the droplet
+# with other projects). Production-style stack for a pilot test. See docs/DEPLOY-DIGITALOCEAN.md.
 #
-#   caddy   HTTPS (Let's Encrypt, automatic) in front of everything, ports 80/443
+# Isolation from other projects on the same droplet:
+#   * project name "sokopay": every container, volume and network is prefixed sokopay-
+#   * Postgres and Redis publish NO ports (private network only), so they never clash
+#   * web publishes only 127.0.0.1:${SOKOPAY_WEB_PORT} for the droplet's existing reverse
+#     proxy (Nginx/Caddy) to forward to; nothing else listens on the public interface
+#   * memory limits on every service, so SokoPay can't starve the other projects
+#
+#   caddy   OPTIONAL (profile "caddy"): only when nothing else on the droplet uses 80/443
 #   web     Django + gunicorn (API, portals, checkout pages, legal pages)
 #   worker  Celery worker (pushes, webhooks, payouts, pollers)
 #   beat    Celery beat (the scheduler: settlements, reconciliation, monitoring...)
 #   db      PostgreSQL 16 (profile "localdb"; skip it when using DO Managed PostgreSQL)
 #   redis   Redis 7 (cache, rate limits, one-time codes, task queue), password protected
 #
-# Only Caddy publishes ports. Postgres and Redis are reachable only inside this network.
+# Postgres and Redis are reachable only inside this project's private network.
 # All settings and secrets come from ./.env (never committed; chmod 600).
 
 name: sokopay
@@ -18,6 +25,7 @@ x-app: &app
   image: sokopay-backend:local
   env_file: .env
   restart: unless-stopped
+  mem_limit: 768m
   depends_on:
     db:
       condition: service_healthy
@@ -29,8 +37,10 @@ x-app: &app
 services:
   web:
     <<: *app
-    command: ["gunicorn", "config.wsgi", "--bind", "0.0.0.0:8000", "--workers", "3",
+    command: ["gunicorn", "config.wsgi", "--bind", "0.0.0.0:8000", "--workers", "2",
               "--timeout", "45", "--access-logfile", "-"]
+    # Reachable only from the droplet itself, for its reverse proxy (default 127.0.0.1:8100).
+    ports: ["127.0.0.1:${SOKOPAY_WEB_PORT:-8100}:8000"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=4).status == 200 else 1)"]
       interval: 30s
@@ -41,12 +51,14 @@ services:
   worker:
     <<: *app
     command: ["celery", "-A", "config", "worker", "-l", "info", "--concurrency", "2"]
+    mem_limit: 512m
     healthcheck:
       disable: true
 
   beat:
     <<: *app
     command: ["celery", "-A", "config", "beat", "-l", "info", "--schedule", "/tmp/celerybeat-schedule"]
+    mem_limit: 256m
     healthcheck:
       disable: true
 
@@ -54,6 +66,8 @@ services:
     image: postgres:16
     profiles: ["localdb"]
     restart: unless-stopped
+    mem_limit: 1g
+    shm_size: 128m
     environment:
       POSTGRES_DB: sokopay
       POSTGRES_USER: sokopay
@@ -69,7 +83,10 @@ services:
   redis:
     image: redis:7
     restart: unless-stopped
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}", "--appendonly", "yes"]
+    mem_limit: 320m
+    # noeviction: the task queue lives here, so never silently drop entries.
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}", "--appendonly", "yes",
+              "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
     volumes: [redisdata:/data]
     healthcheck:
       test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep PONG"]
@@ -82,11 +99,13 @@ services:
 
   caddy:
     image: caddy:2
+    profiles: ["caddy"]
     restart: unless-stopped
+    mem_limit: 128m
     ports: ["80:80", "443:443", "443:443/udp"]
     environment:
       SOKOPAY_DOMAIN: ${SOKOPAY_DOMAIN:?set SOKOPAY_DOMAIN in .env}
-      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in .env}
+      ACME_EMAIL: ${ACME_EMAIL:-}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

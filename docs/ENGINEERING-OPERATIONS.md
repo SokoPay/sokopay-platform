@@ -2,7 +2,7 @@
 
 ## Pilot test server
 
-For a full end-to-end test on one DigitalOcean droplet, see **DEPLOY-DIGITALOCEAN.md** (PDF: `SokoPay-DigitalOcean-Deployment-Guide.pdf`). It uses the files in `deploy/`: Docker Compose, Caddy HTTPS, the `.env` template, and the backup, update and wipe scripts.
+For a full end-to-end test on the shared DigitalOcean droplet (SokoPay as its third project, code pulled from GitHub with a read-only deploy key), see **DEPLOY-DIGITALOCEAN.md** (PDF: `SokoPay-DigitalOcean-Deployment-Guide.pdf`). It uses the files in `deploy/`: Docker Compose (isolated `sokopay` project, web on 127.0.0.1 only), the Nginx site template, the optional Caddy profile, the `.env` template, and the backup, update (git pull) and SokoPay-only wipe scripts.
 
 The server runs `config.settings.staging`, which has production hardening plus the mock payment partner. Production uses `config.settings.prod`. The hardening shared by both lives in `config/settings/hardened.py`.
 
