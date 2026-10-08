@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet)</title><style>
+<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet)</title><style>
 @page { size: A4; margin: 16mm 15mm; }
 body { font-family: 'Segoe UI', Arial, sans-serif; color:#231F20; font-size:9.6pt; line-height:1.42; }
 h1 { font-size:19pt; border-bottom:3px solid #F26522; padding-bottom:2mm; }
@@ -82,8 +82,8 @@ hr { border:none; border-top:1px solid #E8E2DF; margin:4mm 0; }
 <td>The user you normally log in with (this guide calls it <code>deploy</code>). It needs <code>sudo</code> and permission to run <code>docker</code>.</td>
 </tr>
 <tr>
-<td>A subdomain for SokoPay</td>
-<td>For example <code>pay-test.yourdomain.com</code>, as an A record pointing at the droplet's IP (section 4). The phone apps need real HTTPS.</td>
+<td>The SokoPay domain</td>
+<td><strong><code>sokopay.theagbeko.com</code></strong>. Its A record already points at <code>137.184.192.212</code> (section 4). The phone apps need real HTTPS.</td>
 </tr>
 <tr>
 <td>GitHub</td>
@@ -155,12 +155,12 @@ sudo fallocate -l 2G /swapfile &amp;&amp; sudo chmod 600 /swapfile &amp;&amp; su
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 </code></pre>
 <hr />
-<h2>4. A subdomain for SokoPay</h2>
-<p>At your DNS provider (or in DigitalOcean: <strong>Networking</strong>, then <strong>Domains</strong>), add an <strong>A record</strong>. For example, <code>pay-test.yourdomain.com</code> points to the droplet's IP. Check it from your computer:</p>
-<pre><code class="language-bash">ping pay-test.yourdomain.com          # should show the droplet's IP
+<h2>4. The domain: sokopay.theagbeko.com</h2>
+<p>SokoPay's address is <strong><code>sokopay.theagbeko.com</code></strong>. Its DNS A record already points at <strong>137.184.192.212</strong>. Check that this is the droplet:</p>
+<pre><code class="language-bash">curl -4 -s ifconfig.me; echo                # on the droplet: should print 137.184.192.212
+ping -c1 sokopay.theagbeko.com                        # from anywhere: should show 137.184.192.212
 </code></pre>
-<p>With no spare domain, you can use the droplet IP with dashes plus <code>.sslip.io</code>, for example <code>203-0-113-10.sslip.io</code>. It resolves automatically and gets a normal certificate.</p>
-<p>This guide writes <strong><code>pay-test.yourdomain.com</code></strong>; use your own name everywhere.</p>
+<p>If they differ, change the A record for <code>sokopay</code> on <code>theagbeko.com</code> to the droplet's IP. Certificates can't be issued until it matches.</p>
 <hr />
 <h2>5. Pull the code from GitHub</h2>
 <p>The repository <strong>SokoPay/sokopay-platform</strong> is currently <strong>public</strong>, so the droplet clones it over HTTPS with no key or password:</p>
@@ -237,14 +237,15 @@ bash scripts/make-secrets.sh
 </tr>
 </tbody>
 </table>
-<h3>6.2 Fill in the domain, port and profile</h3>
+<h3>6.2 Check the domain, port and profile</h3>
+<p>The template already has these values for <code>sokopay.theagbeko.com</code>. Open the file, set <code>ACME_EMAIL</code> to your email, and confirm the rest:</p>
 <pre><code class="language-bash">nano .env
 </code></pre>
-<pre><code class="language-dotenv">SOKOPAY_DOMAIN=pay-test.yourdomain.com
+<pre><code class="language-dotenv">SOKOPAY_DOMAIN=sokopay.theagbeko.com
 ACME_EMAIL=you@yourcompany.com
-ALLOWED_HOSTS=pay-test.yourdomain.com,localhost,127.0.0.1
-CSRF_TRUSTED_ORIGINS=https://pay-test.yourdomain.com
-QR_BASE_URL=https://pay-test.yourdomain.com
+ALLOWED_HOSTS=sokopay.theagbeko.com,localhost,127.0.0.1
+CSRF_TRUSTED_ORIGINS=https://sokopay.theagbeko.com
+QR_BASE_URL=https://sokopay.theagbeko.com
 SOKOPAY_WEB_PORT=8100
 # Shared droplet (Nginx/Caddy already on 80/443): localdb only
 COMPOSE_PROFILES=localdb
@@ -302,17 +303,16 @@ COMPOSE_PROFILES=localdb
 <p>Use the one option that matches what you found in section 2.</p>
 <h3>7A. The droplet runs Nginx (most common)</h3>
 <pre><code class="language-bash">sudo cp /opt/sokopay/deploy/nginx/sokopay.conf /etc/nginx/sites-available/sokopay
-sudo sed -i 's/test.sokopay.example/pay-test.yourdomain.com/' /etc/nginx/sites-available/sokopay
-# If you chose a different SOKOPAY_WEB_PORT, change 8100 in that file too.
+# The file is already set for sokopay.theagbeko.com and port 8100; edit it only if you changed either.
 sudo ln -s /etc/nginx/sites-available/sokopay /etc/nginx/sites-enabled/sokopay
 sudo nginx -t &amp;&amp; sudo systemctl reload nginx      # test first; the reload doesn't interrupt the other sites
 sudo apt -y install certbot python3-certbot-nginx  # skip if certbot is already installed
-sudo certbot --nginx -d pay-test.yourdomain.com --redirect -m you@yourcompany.com --agree-tos -n
+sudo certbot --nginx -d sokopay.theagbeko.com --redirect -m you@yourcompany.com --agree-tos -n
 </code></pre>
 <p>Certbot adds HTTPS <strong>only to the SokoPay site</strong> and renews it automatically, with the same timer as the other projects' certificates.</p>
 <h3>7B. The droplet runs Caddy (on the host)</h3>
 <p>Add this block to <code>/etc/caddy/Caddyfile</code>, below the existing sites:</p>
-<pre><code class="language-caddyfile">pay-test.yourdomain.com {
+<pre><code class="language-caddyfile">sokopay.theagbeko.com {
     encode zstd gzip
     request_body {
         max_size 10MB
@@ -325,7 +325,7 @@ sudo certbot --nginx -d pay-test.yourdomain.com --redirect -m you@yourcompany.co
 <p>That proxy can't reach <code>127.0.0.1</code> on the host. Give it SokoPay's web container instead:
 1. Find the proxy's network: <code>docker network ls</code>.
 2. Connect SokoPay's web container to it: <code>docker network connect &lt;proxy-network&gt; sokopay-web-1</code>.
-3. Add a route for <code>pay-test.yourdomain.com</code> to <code>sokopay-web-1:8000</code>, the way the other two projects are routed (labels for Traefik, <code>VIRTUAL_HOST</code> for nginx-proxy).</p>
+3. Add a route for <code>sokopay.theagbeko.com</code> to <code>sokopay-web-1:8000</code>, the way the other two projects are routed (labels for Traefik, <code>VIRTUAL_HOST</code> for nginx-proxy).</p>
 <h3>7D. Nothing else uses ports 80/443</h3>
 <p>Use SokoPay's own Caddy. Set <code>COMPOSE_PROFILES=localdb,caddy</code> in <code>.env</code>. Caddy then serves <code>SOKOPAY_DOMAIN</code> with an automatic certificate.</p>
 <hr />
@@ -339,9 +339,9 @@ docker compose ps                          # web (healthy), worker, beat, db, re
 docker ps --format '{{.Names}}'            # the other two projects' containers are still there
 </code></pre>
 <p><strong>Check from your computer.</strong> All three should load:</p>
-<pre><code class="language-text">https://pay-test.yourdomain.com/healthz   -&gt; {&quot;status&quot;: &quot;ok&quot;, ...}
-https://pay-test.yourdomain.com/readyz    -&gt; {&quot;status&quot;: &quot;ok&quot;}
-https://pay-test.yourdomain.com/legal/    -&gt; the legal pages with the orange TEST ENVIRONMENT banner
+<pre><code class="language-text">https://sokopay.theagbeko.com/healthz   -&gt; {&quot;status&quot;: &quot;ok&quot;, ...}
+https://sokopay.theagbeko.com/readyz    -&gt; {&quot;status&quot;: &quot;ok&quot;}
+https://sokopay.theagbeko.com/legal/    -&gt; the legal pages with the orange TEST ENVIRONMENT banner
 </code></pre>
 <p>Also open the other two projects' sites, to confirm they still work.</p>
 <h3>8.1 Load the demo data</h3>
@@ -433,7 +433,7 @@ docker compose build web &amp;&amp; docker compose up -d
 <h2>12. Testing with the apps and portals</h2>
 <h3>12.1 Phone apps pointed at the server</h3>
 <p>On your computer:</p>
-<pre><code class="language-bash">API_BASE_URL=https://pay-test.yourdomain.com/api/v1 bash mobile/scripts/build_apks.sh
+<pre><code class="language-bash">API_BASE_URL=https://sokopay.theagbeko.com/api/v1 bash mobile/scripts/build_apks.sh
 </code></pre>
 <p>The APKs land in <code>mobile/dist/</code>. They work on <strong>real phones</strong> because the server has real HTTPS. They're debug-signed and for testing only.</p>
 <h3>12.2 Sign-in codes</h3>
@@ -442,19 +442,19 @@ docker compose build web &amp;&amp; docker compose up -d
 </code></pre>
 <h3>12.3 Portals</h3>
 <ul>
-<li><strong>Address:</strong> <code>https://pay-test.yourdomain.com/dashboard/</code>. Use the logins from <code>~/sokopay-demo-credentials.md</code>.</li>
+<li><strong>Address:</strong> <code>https://sokopay.theagbeko.com/dashboard/</code>. Use the logins from <code>~/sokopay-demo-credentials.md</code>.</li>
 <li><strong>2FA:</strong> add each account's 2FA secret to an authenticator app, or print the current code:
   <code>bash
   docker compose run --rm web python manage.py demo_2fa_code +233200000004</code></li>
-<li><strong>Mock partner:</strong> <code>https://pay-test.yourdomain.com/dev/mock-partner/</code> approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.</li>
+<li><strong>Mock partner:</strong> <code>https://sokopay.theagbeko.com/dev/mock-partner/</code> approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.</li>
 </ul>
 <h3>12.4 USSD</h3>
-<pre><code class="language-bash">curl -s -X POST &quot;https://pay-test.yourdomain.com/api/v1/ussd/callback?key=&lt;USSD_SHARED_SECRET from .env&gt;&quot; \
+<pre><code class="language-bash">curl -s -X POST &quot;https://sokopay.theagbeko.com/api/v1/ussd/callback?key=&lt;USSD_SHARED_SECRET from .env&gt;&quot; \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 </code></pre>
 <h3>12.5 Following the demo guide</h3>
 <p>Every walkthrough in <code>docs/SokoPay-Demo-Guide.pdf</code> works on the server with these changes:
-- Use <code>https://pay-test.yourdomain.com</code> instead of <code>http://127.0.0.1:8000</code>.
+- Use <code>https://sokopay.theagbeko.com</code> instead of <code>http://127.0.0.1:8000</code>.
 - Use the logins from the credentials file.
 - Read sign-in codes from <code>docker compose logs web</code>.</p>
 <hr />
@@ -479,8 +479,8 @@ docker compose build web &amp;&amp; docker compose up -d
      <code>bash
      sudo rm /etc/nginx/sites-enabled/sokopay /etc/nginx/sites-available/sokopay
      sudo nginx -t &amp;&amp; sudo systemctl reload nginx
-     sudo certbot delete --cert-name pay-test.yourdomain.com</code>
-   - <strong>Caddy on the host (7B):</strong> delete the <code>pay-test.yourdomain.com { ... }</code> block, then <code>sudo systemctl reload caddy</code>.
+     sudo certbot delete --cert-name sokopay.theagbeko.com</code>
+   - <strong>Caddy on the host (7B):</strong> delete the <code>sokopay.theagbeko.com { ... }</code> block, then <code>sudo systemctl reload caddy</code>.
    - <strong>Proxy in Docker (7C):</strong> remove the SokoPay route from that proxy's configuration.
 4. <strong>Remove the code and keys:</strong>
    <code>bash
@@ -488,7 +488,7 @@ docker compose build web &amp;&amp; docker compose up -d
    shred -u ~/sokopay-demo-credentials.md</code>
    If you set up a deploy key (section 5.1), also run <code>rm -f ~/.ssh/sokopay_deploy ~/.ssh/sokopay_deploy.pub</code>, delete the <code>Host github-sokopay</code> block from <code>~/.ssh/config</code>, and remove the key on GitHub (repository Settings, then Deploy keys).
    Consider making the repository <strong>private</strong> again once the test is over (GitHub: Settings, then General, then Danger Zone, then Change visibility).
-5. <strong>Remove the DNS record</strong> for <code>pay-test.yourdomain.com</code>. If you added swap only for SokoPay and want it gone: <code>sudo swapoff /swapfile &amp;&amp; sudo rm /swapfile</code>, then delete its line from <code>/etc/fstab</code>.
+5. <strong>Remove the DNS record</strong> for <code>sokopay.theagbeko.com</code>. If you added swap only for SokoPay and want it gone: <code>sudo swapoff /swapfile &amp;&amp; sudo rm /swapfile</code>, then delete its line from <code>/etc/fstab</code>.
 6. <strong>Check the other projects</strong> still work: open their sites and run <code>docker ps</code>.
 7. <strong>On your computer:</strong> delete any downloaded dumps and credential files. Uninstall the test APKs from testers' phones. Rotate any real credentials you used (Hubtel, Firebase, Sentry).</p>
 <p>The droplet itself is <strong>not</strong> destroyed: the other two projects keep running.</p>

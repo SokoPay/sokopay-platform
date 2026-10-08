@@ -37,7 +37,7 @@ When testing is finished, section 13 removes SokoPay completely **without touchi
 | Item | Notes |
 |---|---|
 | SSH access to the droplet | The user you normally log in with (this guide calls it `deploy`). It needs `sudo` and permission to run `docker`. |
-| A subdomain for SokoPay | For example `pay-test.yourdomain.com`, as an A record pointing at the droplet's IP (section 4). The phone apps need real HTTPS. |
+| The SokoPay domain | **`sokopay.theagbeko.com`**. Its A record already points at `137.184.192.212` (section 4). The phone apps need real HTTPS. |
 | GitHub | The repository `SokoPay/sokopay-platform` is public for now, so no access setup is needed (section 5). |
 | Free resources | About **3 GB of RAM** and **10 GB of disk** for SokoPay (section 2). |
 
@@ -85,17 +85,16 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 
 ---
 
-## 4. A subdomain for SokoPay
+## 4. The domain: sokopay.theagbeko.com
 
-At your DNS provider (or in DigitalOcean: **Networking**, then **Domains**), add an **A record**. For example, `pay-test.yourdomain.com` points to the droplet's IP. Check it from your computer:
+SokoPay's address is **`sokopay.theagbeko.com`**. Its DNS A record already points at **137.184.192.212**. Check that this is the droplet:
 
 ```bash
-ping pay-test.yourdomain.com          # should show the droplet's IP
+curl -4 -s ifconfig.me; echo                # on the droplet: should print 137.184.192.212
+ping -c1 sokopay.theagbeko.com                        # from anywhere: should show 137.184.192.212
 ```
 
-With no spare domain, you can use the droplet IP with dashes plus `.sslip.io`, for example `203-0-113-10.sslip.io`. It resolves automatically and gets a normal certificate.
-
-This guide writes **`pay-test.yourdomain.com`**; use your own name everywhere.
+If they differ, change the A record for `sokopay` on `theagbeko.com` to the droplet's IP. Certificates can't be issued until it matches.
 
 ---
 
@@ -171,18 +170,20 @@ This copies `.env.example` to `.env` and fills every `CHANGE_ME` with a strong r
 | `USSD_SHARED_SECRET` | The USSD gateway must send this (section 12.4) |
 | `RAIL_WEBHOOK_SECRET` | Signs the mock partner's callbacks |
 
-### 6.2 Fill in the domain, port and profile
+### 6.2 Check the domain, port and profile
+
+The template already has these values for `sokopay.theagbeko.com`. Open the file, set `ACME_EMAIL` to your email, and confirm the rest:
 
 ```bash
 nano .env
 ```
 
 ```dotenv
-SOKOPAY_DOMAIN=pay-test.yourdomain.com
+SOKOPAY_DOMAIN=sokopay.theagbeko.com
 ACME_EMAIL=you@yourcompany.com
-ALLOWED_HOSTS=pay-test.yourdomain.com,localhost,127.0.0.1
-CSRF_TRUSTED_ORIGINS=https://pay-test.yourdomain.com
-QR_BASE_URL=https://pay-test.yourdomain.com
+ALLOWED_HOSTS=sokopay.theagbeko.com,localhost,127.0.0.1
+CSRF_TRUSTED_ORIGINS=https://sokopay.theagbeko.com
+QR_BASE_URL=https://sokopay.theagbeko.com
 SOKOPAY_WEB_PORT=8100
 # Shared droplet (Nginx/Caddy already on 80/443): localdb only
 COMPOSE_PROFILES=localdb
@@ -221,12 +222,11 @@ Use the one option that matches what you found in section 2.
 
 ```bash
 sudo cp /opt/sokopay/deploy/nginx/sokopay.conf /etc/nginx/sites-available/sokopay
-sudo sed -i 's/test.sokopay.example/pay-test.yourdomain.com/' /etc/nginx/sites-available/sokopay
-# If you chose a different SOKOPAY_WEB_PORT, change 8100 in that file too.
+# The file is already set for sokopay.theagbeko.com and port 8100; edit it only if you changed either.
 sudo ln -s /etc/nginx/sites-available/sokopay /etc/nginx/sites-enabled/sokopay
 sudo nginx -t && sudo systemctl reload nginx      # test first; the reload doesn't interrupt the other sites
 sudo apt -y install certbot python3-certbot-nginx  # skip if certbot is already installed
-sudo certbot --nginx -d pay-test.yourdomain.com --redirect -m you@yourcompany.com --agree-tos -n
+sudo certbot --nginx -d sokopay.theagbeko.com --redirect -m you@yourcompany.com --agree-tos -n
 ```
 
 Certbot adds HTTPS **only to the SokoPay site** and renews it automatically, with the same timer as the other projects' certificates.
@@ -236,7 +236,7 @@ Certbot adds HTTPS **only to the SokoPay site** and renews it automatically, wit
 Add this block to `/etc/caddy/Caddyfile`, below the existing sites:
 
 ```caddyfile
-pay-test.yourdomain.com {
+sokopay.theagbeko.com {
     encode zstd gzip
     request_body {
         max_size 10MB
@@ -252,7 +252,7 @@ Then run `sudo caddy validate --config /etc/caddy/Caddyfile && sudo systemctl re
 That proxy can't reach `127.0.0.1` on the host. Give it SokoPay's web container instead:
 1. Find the proxy's network: `docker network ls`.
 2. Connect SokoPay's web container to it: `docker network connect <proxy-network> sokopay-web-1`.
-3. Add a route for `pay-test.yourdomain.com` to `sokopay-web-1:8000`, the way the other two projects are routed (labels for Traefik, `VIRTUAL_HOST` for nginx-proxy).
+3. Add a route for `sokopay.theagbeko.com` to `sokopay-web-1:8000`, the way the other two projects are routed (labels for Traefik, `VIRTUAL_HOST` for nginx-proxy).
 
 ### 7D. Nothing else uses ports 80/443
 
@@ -275,9 +275,9 @@ docker ps --format '{{.Names}}'            # the other two projects' containers 
 **Check from your computer.** All three should load:
 
 ```text
-https://pay-test.yourdomain.com/healthz   -> {"status": "ok", ...}
-https://pay-test.yourdomain.com/readyz    -> {"status": "ok"}
-https://pay-test.yourdomain.com/legal/    -> the legal pages with the orange TEST ENVIRONMENT banner
+https://sokopay.theagbeko.com/healthz   -> {"status": "ok", ...}
+https://sokopay.theagbeko.com/readyz    -> {"status": "ok"}
+https://sokopay.theagbeko.com/legal/    -> the legal pages with the orange TEST ENVIRONMENT banner
 ```
 
 Also open the other two projects' sites, to confirm they still work.
@@ -368,7 +368,7 @@ Restore the backup `update.sh` made only if a migration changed the data.
 On your computer:
 
 ```bash
-API_BASE_URL=https://pay-test.yourdomain.com/api/v1 bash mobile/scripts/build_apks.sh
+API_BASE_URL=https://sokopay.theagbeko.com/api/v1 bash mobile/scripts/build_apks.sh
 ```
 
 The APKs land in `mobile/dist/`. They work on **real phones** because the server has real HTTPS. They're debug-signed and for testing only.
@@ -383,24 +383,24 @@ docker compose logs web | grep "SMS:console" | tail -5
 
 ### 12.3 Portals
 
-- **Address:** `https://pay-test.yourdomain.com/dashboard/`. Use the logins from `~/sokopay-demo-credentials.md`.
+- **Address:** `https://sokopay.theagbeko.com/dashboard/`. Use the logins from `~/sokopay-demo-credentials.md`.
 - **2FA:** add each account's 2FA secret to an authenticator app, or print the current code:
   ```bash
   docker compose run --rm web python manage.py demo_2fa_code +233200000004
   ```
-- **Mock partner:** `https://pay-test.yourdomain.com/dev/mock-partner/` approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.
+- **Mock partner:** `https://sokopay.theagbeko.com/dev/mock-partner/` approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.
 
 ### 12.4 USSD
 
 ```bash
-curl -s -X POST "https://pay-test.yourdomain.com/api/v1/ussd/callback?key=<USSD_SHARED_SECRET from .env>" \
+curl -s -X POST "https://sokopay.theagbeko.com/api/v1/ussd/callback?key=<USSD_SHARED_SECRET from .env>" \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 ```
 
 ### 12.5 Following the demo guide
 
 Every walkthrough in `docs/SokoPay-Demo-Guide.pdf` works on the server with these changes:
-- Use `https://pay-test.yourdomain.com` instead of `http://127.0.0.1:8000`.
+- Use `https://sokopay.theagbeko.com` instead of `http://127.0.0.1:8000`.
 - Use the logins from the credentials file.
 - Read sign-in codes from `docker compose logs web`.
 
@@ -429,9 +429,9 @@ Every walkthrough in `docs/SokoPay-Demo-Guide.pdf` works on the server with thes
      ```bash
      sudo rm /etc/nginx/sites-enabled/sokopay /etc/nginx/sites-available/sokopay
      sudo nginx -t && sudo systemctl reload nginx
-     sudo certbot delete --cert-name pay-test.yourdomain.com
+     sudo certbot delete --cert-name sokopay.theagbeko.com
      ```
-   - **Caddy on the host (7B):** delete the `pay-test.yourdomain.com { ... }` block, then `sudo systemctl reload caddy`.
+   - **Caddy on the host (7B):** delete the `sokopay.theagbeko.com { ... }` block, then `sudo systemctl reload caddy`.
    - **Proxy in Docker (7C):** remove the SokoPay route from that proxy's configuration.
 4. **Remove the code and keys:**
    ```bash
@@ -440,7 +440,7 @@ Every walkthrough in `docs/SokoPay-Demo-Guide.pdf` works on the server with thes
    ```
    If you set up a deploy key (section 5.1), also run `rm -f ~/.ssh/sokopay_deploy ~/.ssh/sokopay_deploy.pub`, delete the `Host github-sokopay` block from `~/.ssh/config`, and remove the key on GitHub (repository Settings, then Deploy keys).
    Consider making the repository **private** again once the test is over (GitHub: Settings, then General, then Danger Zone, then Change visibility).
-5. **Remove the DNS record** for `pay-test.yourdomain.com`. If you added swap only for SokoPay and want it gone: `sudo swapoff /swapfile && sudo rm /swapfile`, then delete its line from `/etc/fstab`.
+5. **Remove the DNS record** for `sokopay.theagbeko.com`. If you added swap only for SokoPay and want it gone: `sudo swapoff /swapfile && sudo rm /swapfile`, then delete its line from `/etc/fstab`.
 6. **Check the other projects** still work: open their sites and run `docker ps`.
 7. **On your computer:** delete any downloaded dumps and credential files. Uninstall the test APKs from testers' phones. Rotate any real credentials you used (Hubtel, Firebase, Sentry).
 
