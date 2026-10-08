@@ -29,7 +29,7 @@ from rest_framework.views import APIView
 
 from apps.notifications.sms import get_sms_provider
 
-from . import services
+from . import otp, services
 from .otp import OtpError
 from .serializers import (
     CloseAccountSerializer,
@@ -62,7 +62,7 @@ class OtpRequestView(APIView):
             return Response({"error": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         # Deliver the code via the configured SMS provider (console in dev).
         message = (
-            f"Your SokoPay code is {code}. It expires in 5 minutes. "
+            f"Your SokoPay code is {code}. It expires in {otp.ttl_minutes()} minutes. "
             "Never share it, not even with SokoPay staff."
         )
         result = get_sms_provider().send(phone, message)
@@ -145,7 +145,7 @@ class PinForgotView(APIView):
         except OtpError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_429_TOO_MANY_REQUESTS)
         if code:
-            get_sms_provider().send(phone, f"Your SokoPay PIN reset code is {code}. It expires in 5 minutes. "
+            get_sms_provider().send(phone, f"Your SokoPay PIN reset code is {code}. It expires in {otp.ttl_minutes()} minutes. "
                                            "Never share it. If you didn't ask for this, ignore this message.")
         return Response({"sent": True})
 

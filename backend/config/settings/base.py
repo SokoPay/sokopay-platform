@@ -427,11 +427,20 @@ PUSH_PROVIDER = env("PUSH_PROVIDER", default="console")
 FCM_PROJECT_ID = env("FCM_PROJECT_ID", default="")
 FCM_SERVICE_ACCOUNT_FILE = env("FCM_SERVICE_ACCOUNT_FILE", default="")
 
-# SMS (OTP delivery and alerts). Provider: console | hubtel | mnotify.
+# SMS (OTP delivery and alerts). Provider: console | arkesel | hubtel | mnotify.
 # Credentials come from the environment; nothing secret lives in code.
 # ---------------------------------------------------------------------------
 SMS_PROVIDER = env("SMS_PROVIDER", default="console")
 SMS_SENDER_ID = env("SMS_SENDER_ID", default="SokoPay")
+ARKESEL_API_KEY = env("ARKESEL_API_KEY", default="")
+# Sender ID approved on the Arkesel dashboard (max 11 chars); falls back to SMS_SENDER_ID.
+ARKESEL_SENDER_ID = env("ARKESEL_SENDER_ID", default="")
+ARKESEL_SANDBOX = env.bool("ARKESEL_SANDBOX", default=False)  # accepted + logged by Arkesel, not delivered
 HUBTEL_CLIENT_ID = env("HUBTEL_CLIENT_ID", default="")
 HUBTEL_CLIENT_SECRET = env("HUBTEL_CLIENT_SECRET", default="")
 MNOTIFY_API_KEY = env("MNOTIFY_API_KEY", default="")
+# How long an SMS one-time code stays valid (app sign-in, PIN reset, portal 2FA).
+OTP_TTL_SECONDS = env.int("OTP_TTL_SECONDS", default=10 * 60)
+# Portal 2FA by SMS: the 2FA page texts a code to the user's phone. Authenticator-app
+# and backup codes keep working alongside it. On by default on servers (hardened.py).
+PORTAL_2FA_SMS = env.bool("PORTAL_2FA_SMS", default=False)

@@ -1,11 +1,13 @@
 """
-Portal security records: 2FA backup codes and a security-event audit trail.
+Portal security records: 2FA backup codes, the SMS 2FA device and a security-event
+audit trail.
 """
 
 from __future__ import annotations
 
 from django.conf import settings
 from django.db import models
+from django_otp.models import Device
 
 from apps.common.models import TimeStampedModel
 
@@ -60,3 +62,42 @@ class SecurityEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_kind_display()} — {self.user_id} at {self.created_at:%Y-%m-%d %H:%M}"
+
+
+class SmsDevice(Device):
+    """
+    Portal 2FA by SMS: texts a one-time code to the user's phone through the configured
+    SMS provider (Arkesel in production). One per user, created on first use when
+    PORTAL_2FA_SMS is on. Codes live hashed in the cache (apps.accounts.otp, purpose
+    "portal2fa"), expire after OTP_TTL_SECONDS, are single-use, and share the OTP
+    request/attempt limits. A code issued for app sign-in never works here, or vice versa.
+    """
+
+    PURPOSE = "portal2fa"
+
+    class Meta:
+        db_table = "portal_sms_device"
+
+    def generate_challenge(self) -> bool:
+        """Text a new code. True if the provider accepted it; raises OtpError when rate limited."""
+        from apps.accounts import otp
+        from apps.notifications.sms import get_sms_provider
+
+        code = otp.request_otp(self.user.phone, purpose=self.PURPOSE)
+        result = get_sms_provider().send(
+            self.user.phone,
+            f"Your SokoPay sign-in code is {code}. It expires in {otp.ttl_minutes()} minutes. "
+            "Never share it, not even with SokoPay staff.",
+        )
+        return result.success
+
+    def verify_token(self, token) -> bool:
+        from apps.accounts import otp
+
+        token = str(token or "")
+        if not token.isdigit() or len(token) != 6:
+            return False
+        try:
+            return otp.verify_otp(self.user.phone, token, purpose=self.PURPOSE)
+        except otp.OtpError:
+            return False

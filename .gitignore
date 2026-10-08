@@ -59,7 +59,7 @@ Thumbs.db
 backend/demo-credentials.md
 
 # Built apps and signing keys (APKs are built by CI or locally; keystores never in git)
-mobile/dist/*.apk
+mobile/dist/**/*.apk
 *.aab
 *.jks
 *.keystore

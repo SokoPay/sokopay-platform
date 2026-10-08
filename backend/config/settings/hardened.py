@@ -19,6 +19,12 @@ from django.core.exceptions import ImproperlyConfigured  # noqa: E402
 if not env("FIELD_ENCRYPTION_KEY", default=""):
     raise ImproperlyConfigured("FIELD_ENCRYPTION_KEY is required in production.")
 
+# Real SMS providers need their credentials; fail at start-up, not at the first sign-in.
+_SMS = env("SMS_PROVIDER", default="console").lower()
+if _SMS == "arkesel" and not env("ARKESEL_API_KEY", default=""):
+    raise ImproperlyConfigured("SMS_PROVIDER=arkesel needs ARKESEL_API_KEY.")
+PORTAL_2FA_SMS = env.bool("PORTAL_2FA_SMS", default=True)
+
 # Required: an explicit host allow-list (no wildcards).
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 

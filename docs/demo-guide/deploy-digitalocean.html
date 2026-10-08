@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet)</title><style>
+<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet) (shared droplet)</title><style>
 @page { size: A4; margin: 16mm 15mm; }
 body { font-family: 'Segoe UI', Arial, sans-serif; color:#231F20; font-size:9.6pt; line-height:1.42; }
 h1 { font-size:19pt; border-bottom:3px solid #F26522; padding-bottom:2mm; }
@@ -285,8 +285,23 @@ COMPOSE_PROFILES=localdb
 </tr>
 <tr>
 <td><code>SMS_PROVIDER</code></td>
-<td><code>console</code></td>
-<td>Sign-in codes are written to the log (section 12.2).</td>
+<td><code>console</code> or <code>arkesel</code></td>
+<td><code>console</code> writes codes to the log; <code>arkesel</code> sends real SMS (section 12.2).</td>
+</tr>
+<tr>
+<td><code>ARKESEL_API_KEY</code>, <code>ARKESEL_SENDER_ID</code></td>
+<td>your key, <code>MySokoApp</code></td>
+<td>Needed for <code>arkesel</code>. The server refuses to start with <code>arkesel</code> and no key.</td>
+</tr>
+<tr>
+<td><code>OTP_TTL_SECONDS</code></td>
+<td><code>600</code></td>
+<td>How long an SMS code stays valid (10 minutes).</td>
+</tr>
+<tr>
+<td><code>PORTAL_2FA_SMS</code></td>
+<td><code>True</code></td>
+<td>Web portal 2FA texts a code to the user's phone. Authenticator apps and backup codes still work.</td>
 </tr>
 <tr>
 <td><code>PUSH_PROVIDER</code></td>
@@ -436,14 +451,29 @@ docker compose build web &amp;&amp; docker compose up -d
 <pre><code class="language-bash">API_BASE_URL=https://sokopay.theagbeko.com/api/v1 bash mobile/scripts/build_apks.sh
 </code></pre>
 <p>The APKs land in <code>mobile/dist/</code>. They work on <strong>real phones</strong> because the server has real HTTPS. They're debug-signed and for testing only.</p>
-<h3>12.2 Sign-in codes</h3>
-<p>With <code>SMS_PROVIDER=console</code>, no SMS is sent. Read the codes on the droplet:</p>
+<h3>12.2 Sign-in codes (SMS through Arkesel)</h3>
+<p>The same SMS code system serves the phone apps (sign-in, PIN reset) and the web portals (2FA). Each code is 6 digits, valid for <code>OTP_TTL_SECONDS</code> (10 minutes), and works once. A code sent for the app can't be used for the portal, and the reverse.</p>
+<p><strong>Before switching on real SMS:</strong> the demo people have made-up numbers (<code>+233200000001</code> and so on) that may belong to real strangers. Point the accounts you'll test with at your own phones first:</p>
+<pre><code class="language-bash">docker compose run --rm web python manage.py shell -c &quot;from apps.accounts.models import User; User.objects.filter(phone='+233200000001').update(phone='+233XXXXXXXXX')&quot;
+</code></pre>
+<p>Replace <code>+233XXXXXXXXX</code> with your number, then sign in with that number. For the apps, testers can simply sign up with their own numbers.</p>
+<p><strong>Switch on Arkesel</strong> in <code>/sokopay/deploy/.env</code>:</p>
+<pre><code class="language-dotenv">SMS_PROVIDER=arkesel
+ARKESEL_API_KEY=&lt;your key from the Arkesel dashboard&gt;
+ARKESEL_SENDER_ID=MySokoApp
+ARKESEL_SANDBOX=False
+OTP_TTL_SECONDS=600
+PORTAL_2FA_SMS=True
+</code></pre>
+<p>Then run <code>docker compose up -d</code>. To try the connection first without spending credit, set <code>ARKESEL_SANDBOX=True</code>. Arkesel then accepts the messages and shows them in its SMS history report, but doesn't deliver them.</p>
+<p><strong>If an SMS doesn't arrive</strong>, run <code>docker compose logs web | grep -i arkesel</code>. Arkesel's reason (low balance, sender ID not approved, wrong key) is logged there; codes and keys never are.</p>
+<p><strong>With <code>SMS_PROVIDER=console</code></strong> nothing is sent; read the codes on the droplet:</p>
 <pre><code class="language-bash">docker compose logs web | grep &quot;SMS:console&quot; | tail -5
 </code></pre>
 <h3>12.3 Portals</h3>
 <ul>
 <li><strong>Address:</strong> <code>https://sokopay.theagbeko.com/dashboard/</code>. Use the logins from <code>~/sokopay-demo-credentials.md</code>.</li>
-<li><strong>2FA:</strong> add each account's 2FA secret to an authenticator app, or print the current code:
+<li><strong>2FA:</strong> after the password, the 2FA page texts a 6-digit code to the account's phone. "Send a new code" is allowed every 30 seconds, up to 5 codes an hour. The authenticator-app secret in the credentials file still works too, or print the app's current code:
   <code>bash
   docker compose run --rm web python manage.py demo_2fa_code +233200000004</code></li>
 <li><strong>Mock partner:</strong> <code>https://sokopay.theagbeko.com/dev/mock-partner/</code> approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.</li>

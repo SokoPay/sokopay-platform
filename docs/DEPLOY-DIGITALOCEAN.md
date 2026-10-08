@@ -203,7 +203,10 @@ grep CHANGE_ME .env
 | `COMPOSE_PROFILES` | `localdb` | Add `,caddy` only when nothing else uses ports 80/443 (section 7D). |
 | `SOKOPAY_ACTIVE_LICENCE` | `DEMI` | Every feature on, for a full test. |
 | `RAIL_PROVIDER`, `KYC_IDENTITY_PROVIDER` | `mock` | No real money or real identity checks. |
-| `SMS_PROVIDER` | `console` | Sign-in codes are written to the log (section 12.2). |
+| `SMS_PROVIDER` | `console` or `arkesel` | `console` writes codes to the log; `arkesel` sends real SMS (section 12.2). |
+| `ARKESEL_API_KEY`, `ARKESEL_SENDER_ID` | your key, `MySokoApp` | Needed for `arkesel`. The server refuses to start with `arkesel` and no key. |
+| `OTP_TTL_SECONDS` | `600` | How long an SMS code stays valid (10 minutes). |
+| `PORTAL_2FA_SMS` | `True` | Web portal 2FA texts a code to the user's phone. Authenticator apps and backup codes still work. |
 | `PUSH_PROVIDER` | `console` | Set to `fcm` once Firebase is configured. |
 
 **Optional: DigitalOcean Managed PostgreSQL** instead of the container. Set `COMPOSE_PROFILES=` (empty, or just `caddy`) and paste the cluster's connection string, keeping `sslmode=require`:
@@ -373,9 +376,34 @@ API_BASE_URL=https://sokopay.theagbeko.com/api/v1 bash mobile/scripts/build_apks
 
 The APKs land in `mobile/dist/`. They work on **real phones** because the server has real HTTPS. They're debug-signed and for testing only.
 
-### 12.2 Sign-in codes
+### 12.2 Sign-in codes (SMS through Arkesel)
 
-With `SMS_PROVIDER=console`, no SMS is sent. Read the codes on the droplet:
+The same SMS code system serves the phone apps (sign-in, PIN reset) and the web portals (2FA). Each code is 6 digits, valid for `OTP_TTL_SECONDS` (10 minutes), and works once. A code sent for the app can't be used for the portal, and the reverse.
+
+**Before switching on real SMS:** the demo people have made-up numbers (`+233200000001` and so on) that may belong to real strangers. Point the accounts you'll test with at your own phones first:
+
+```bash
+docker compose run --rm web python manage.py shell -c "from apps.accounts.models import User; User.objects.filter(phone='+233200000001').update(phone='+233XXXXXXXXX')"
+```
+
+Replace `+233XXXXXXXXX` with your number, then sign in with that number. For the apps, testers can simply sign up with their own numbers.
+
+**Switch on Arkesel** in `/sokopay/deploy/.env`:
+
+```dotenv
+SMS_PROVIDER=arkesel
+ARKESEL_API_KEY=<your key from the Arkesel dashboard>
+ARKESEL_SENDER_ID=MySokoApp
+ARKESEL_SANDBOX=False
+OTP_TTL_SECONDS=600
+PORTAL_2FA_SMS=True
+```
+
+Then run `docker compose up -d`. To try the connection first without spending credit, set `ARKESEL_SANDBOX=True`. Arkesel then accepts the messages and shows them in its SMS history report, but doesn't deliver them.
+
+**If an SMS doesn't arrive**, run `docker compose logs web | grep -i arkesel`. Arkesel's reason (low balance, sender ID not approved, wrong key) is logged there; codes and keys never are.
+
+**With `SMS_PROVIDER=console`** nothing is sent; read the codes on the droplet:
 
 ```bash
 docker compose logs web | grep "SMS:console" | tail -5
@@ -384,7 +412,7 @@ docker compose logs web | grep "SMS:console" | tail -5
 ### 12.3 Portals
 
 - **Address:** `https://sokopay.theagbeko.com/dashboard/`. Use the logins from `~/sokopay-demo-credentials.md`.
-- **2FA:** add each account's 2FA secret to an authenticator app, or print the current code:
+- **2FA:** after the password, the 2FA page texts a 6-digit code to the account's phone. "Send a new code" is allowed every 30 seconds, up to 5 codes an hour. The authenticator-app secret in the credentials file still works too, or print the app's current code:
   ```bash
   docker compose run --rm web python manage.py demo_2fa_code +233200000004
   ```

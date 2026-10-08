@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import base64
 import re
+import time
 
 import segno
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout
 from django.core.exceptions import PermissionDenied
@@ -24,6 +26,7 @@ from django_otp import login as otp_login
 from django_otp import match_token
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
+from apps.accounts import otp
 from apps.common.audit import record as audit
 from apps.common.money import Money, MoneyError
 from apps.compliance.models import Alert as AmlAlert
@@ -35,7 +38,7 @@ from apps.payments.models import Payment
 from . import ratelimit, security
 from .decorators import merchant_required, staff_required
 from .forms import LoginForm, RequestSettlementForm, SettlementAccountForm
-from .models import SecurityEvent
+from .models import SecurityEvent, SmsDevice
 
 
 def _throttled(request, action: str) -> bool:
@@ -105,14 +108,50 @@ def _after_2fa(user):
 
 
 # ---------------------------------------------------------------------------
-# Two-factor authentication (TOTP, e.g. Google Authenticator) — staff and merchants
+# Two-factor authentication — staff and merchants. Codes come from an authenticator app
+# (TOTP), a one-time backup code, or (PORTAL_2FA_SMS) an SMS to the user's phone.
 # ---------------------------------------------------------------------------
+SMS_RESEND_SECONDS = 30
+_SMS_SENT_AT = "twofa_sms_at"
+
+
+def _sms_2fa(user) -> bool:
+    return bool(getattr(settings, "PORTAL_2FA_SMS", False) and getattr(user, "phone", ""))
+
+
+def _phone_hint(phone: str) -> str:
+    return f"{phone[:4]} ••• ••• {phone[-3:]}" if len(phone) > 7 else "your phone"
+
+
+def _send_sms_code(request, user) -> bool:
+    """Text a 2FA code to the user. On failure, explains why and returns False."""
+    device, _ = SmsDevice.objects.get_or_create(user=user, defaults={"name": "SMS", "confirmed": True})
+    try:
+        sent = device.generate_challenge()
+    except otp.OtpError as exc:
+        messages.error(request, str(exc))
+        return False
+    if not sent:
+        messages.error(request, "We couldn't send the SMS just now. Try again in a moment"
+                                " or use your authenticator app.")
+        return False
+    request.session[_SMS_SENT_AT] = int(time.time())
+    return True
+
+
 def twofa(request):
     """
-    Single entry point for 2FA, for staff and merchant users. It enrols a user who has
-    no confirmed TOTP device (QR + secret, confirmed by the first valid code, then ten
-    one-time backup codes shown once), and otherwise asks for the current code or a
-    backup code. Five wrong codes in 15 minutes signs the user out and locks 2FA.
+    Single entry point for 2FA, for staff and merchant users.
+
+    With PORTAL_2FA_SMS on (the default on servers), the page texts a code to the user's
+    phone on arrival and offers "Resend"; the SMS code, an authenticator code or a backup
+    code all work. Users can still add an authenticator app (?setup=app).
+
+    Otherwise it enrols a user who has no confirmed TOTP device (QR + secret, confirmed by
+    the first valid code, then ten one-time backup codes shown once), and asks everyone
+    else for the current code or a backup code.
+
+    Five wrong codes in 15 minutes signs the user out and locks 2FA.
     """
     user = request.user
     if not user.is_authenticated:
@@ -130,17 +169,28 @@ def twofa(request):
         return redirect("portal:login")
 
     confirmed = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    sms = _sms_2fa(user) and request.GET.get("setup") != "app"
 
     if request.method == "POST":
+        if sms and request.POST.get("action") == "resend":
+            wait = SMS_RESEND_SECONDS - (int(time.time()) - request.session.get(_SMS_SENT_AT, 0))
+            if wait > 0:
+                messages.error(request, f"Please wait {wait} seconds before asking for another code.")
+            elif _send_sms_code(request, user):
+                messages.success(request, "We've sent you a new code.")
+            return redirect("portal:twofa")
+
         token = request.POST.get("token", "").strip()
-        if confirmed:
+        if confirmed or sms:
+            # match_token tries every confirmed device: the SMS device and/or the app.
             device = match_token(user, re.sub(r"\D", "", token)) if len(token) <= 8 else None
             used_backup = False
-            if device is None and security.consume_backup_code(user, token):
+            if device is None and confirmed and security.consume_backup_code(user, token):
                 device, used_backup = confirmed, True
             if device is not None:
                 otp_login(request, device)           # mark the session OTP-verified
                 ratelimit.reset("twofa_user", ident)
+                request.session.pop(_SMS_SENT_AT, None)
                 if used_backup:
                     left = security.backup_codes_left(user)
                     security.record(SecurityEvent.Kind.BACKUP_USED, user=user, ip=ip,
@@ -168,6 +218,14 @@ def twofa(request):
             messages.error(request, LOCKED_MESSAGE)
             return redirect("portal:login")
         messages.error(request, "That code is not valid. Try again.")
+
+    if sms:
+        # Text a code on arrival, unless one sent in this session is still valid.
+        if int(time.time()) - request.session.get(_SMS_SENT_AT, 0) > otp.ttl_seconds():
+            _send_sms_code(request, user)
+        return render(request, "portal/twofa_sms.html",
+                      {"phone_hint": _phone_hint(user.phone), "minutes": otp.ttl_minutes(),
+                       "has_app": confirmed is not None})
 
     if confirmed:
         return render(request, "portal/twofa_verify.html", {})

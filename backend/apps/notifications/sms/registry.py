@@ -6,12 +6,14 @@ import functools
 
 from django.conf import settings
 
+from .arkesel import ArkeselSmsProvider
 from .base import SmsProvider
 from .console import ConsoleSmsProvider
 from .hubtel import HubtelSmsProvider
 from .mnotify import MnotifySmsProvider
 
 _REGISTRY: dict[str, type[SmsProvider]] = {
+    "arkesel": ArkeselSmsProvider,
     "console": ConsoleSmsProvider,
     "hubtel": HubtelSmsProvider,
     "mnotify": MnotifySmsProvider,
