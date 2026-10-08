@@ -21,9 +21,12 @@
     <h2 class="font-medium mb-2">Documents</h2>
     <ul class="divide-y divide-gray-50">
       {% for d in documents %}
-      <li class="py-2 flex justify-between">
+      <li class="py-2 flex justify-between items-center gap-2">
         <span>{{ d.get_kind_display }}</span>
-        <span>{% include "portal/_status_pill.html" with status=d.status %}</span>
+        <span class="flex items-center gap-3">
+          {% if d.storage_key %}<a href="{% url 'portal:merchant_document' m.pk d.pk %}" class="text-orange">Download</a>{% endif %}
+          {% include "portal/_status_pill.html" with status=d.status %}
+        </span>
       </li>
       {% empty %}<li class="py-2 text-ink/40">No documents uploaded.</li>{% endfor %}
     </ul>
@@ -35,8 +38,13 @@
   <ul class="divide-y divide-gray-50">
     {% for mem in members %}
     <li class="py-2 flex flex-wrap items-center justify-between gap-2">
-      <span>{{ mem.user.full_name|default:mem.user.phone }} · {{ mem.get_role_display }}
-        · 2FA {% if mem.has_2fa %}<span class="text-success">on</span>{% else %}<span class="text-warning">not set up</span>{% endif %}</span>
+      <span>{{ mem.user.full_name|default:mem.user.phone }} · {{ mem.user.phone }} · {{ mem.get_role_display }}
+        · 2FA app {% if mem.has_2fa %}<span class="text-success">on</span>{% else %}<span class="text-ink/50">not set up</span>{% endif %}
+        · password {% if mem.has_password %}<span class="text-success">set</span>{% else %}<span class="text-warning">not set (invite pending)</span>{% endif %}</span>
+      <form method="post">{% csrf_token %}
+        <input type="hidden" name="action" value="resend_invite"><input type="hidden" name="member" value="{{ mem.pk }}">
+        <button class="border border-ink/20 hover:border-orange rounded-md px-3 py-1">{% if mem.has_password %}Send password link{% else %}Resend invite{% endif %}</button>
+      </form>
       {% if mem.has_2fa %}
       <form method="post" class="flex items-center gap-2">{% csrf_token %}
         <input type="hidden" name="action" value="reset_2fa"><input type="hidden" name="member" value="{{ mem.pk }}">

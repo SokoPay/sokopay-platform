@@ -6,7 +6,12 @@
 <div class="grid md:grid-cols-2 gap-4">
   <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
     <h2 class="font-medium mb-2">Two-factor authentication</h2>
-    {% if enrolled %}
+    {% if sms_2fa %}
+      <p class="mb-2"><span class="text-success font-medium">On.</span> At each sign-in we text a code to <strong>{{ phone_hint }}</strong>.</p>
+      {% if enrolled %}<p class="text-ink/60">Your authenticator app works too. Backup codes left: <strong>{{ codes_left }}</strong> of 10.</p>
+      {% else %}<p class="text-ink/60 mb-3">Optional: add an authenticator app for when you have no signal.</p>
+      <a href="{% url 'portal:twofa' %}?setup=app" class="inline-block border border-ink/20 hover:border-orange rounded-md px-4 py-2">Add authenticator app</a>{% endif %}
+    {% elif enrolled %}
       <p class="mb-1"><span class="text-success font-medium">On.</span> You're asked for a code from your authenticator app at each sign-in.</p>
       <p class="text-ink/60">Backup codes left: <strong>{{ codes_left }}</strong> of 10.</p>
       {% if role_requires %}<p class="text-xs text-ink/40 mt-2">Required for your role.</p>{% endif %}
@@ -14,6 +19,21 @@
       <p class="mb-3 text-warning">Off. Turn it on to protect your account even if your password leaks.</p>
       <a href="{% url 'portal:twofa' %}" class="inline-block bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2">Set up 2FA</a>
     {% endif %}
+  </div>
+
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">Change password</h2>
+    <form method="post" class="space-y-2">
+      {% csrf_token %}<input type="hidden" name="action" value="change_password">
+      <input name="current" type="password" required autocomplete="current-password" placeholder="Current password"
+             class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <input name="new1" type="password" required autocomplete="new-password" placeholder="New password (10+ characters)"
+             class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <input name="new2" type="password" required autocomplete="new-password" placeholder="Repeat new password"
+             class="w-full border border-gray-200 rounded-md px-3 py-2">
+      <button class="border border-ink/20 hover:border-orange rounded-md px-4 py-2">Change password</button>
+    </form>
+    <p class="text-xs text-ink/40 mt-2">Changing it signs you out everywhere else.</p>
   </div>
 
   {% if enrolled %}

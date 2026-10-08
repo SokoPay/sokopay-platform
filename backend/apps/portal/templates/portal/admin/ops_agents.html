@@ -5,12 +5,14 @@
 <h1 class="text-xl font-semibold mb-4">Agents</h1>
 <div class="grid md:grid-cols-3 gap-4 mb-6">
   <form method="post" class="bg-surface rounded-lg shadow-sm p-4 space-y-2 text-sm">{% csrf_token %}
-    <h2 class="font-medium">Register an agent</h2>
-    <p class="text-xs text-ink/50">The person must already have a SokoPay account (phone or wallet ID).</p>
-    <input name="phone" required placeholder="Phone or wallet ID" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <h2 class="font-medium">Add an agent</h2>
+    <p class="text-xs text-ink/50">New or existing SokoPay users. They're texted to install the Agent app and sign in with
+      this number; they stay pending until you activate them after KYC checks.</p>
+    <input name="full_name" placeholder="Agent's full name" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <input name="phone" required placeholder="Phone, e.g. 0244058519" inputmode="tel" class="w-full border border-gray-200 rounded-md px-3 py-2">
     <input name="display_name" placeholder="Shop / kiosk name" class="w-full border border-gray-200 rounded-md px-3 py-2">
     <input name="location" placeholder="Location (e.g. Madina market)" class="w-full border border-gray-200 rounded-md px-3 py-2">
-    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Register (pending)</button>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Add agent (pending)</button>
   </form>
   <div class="md:col-span-2 text-sm flex flex-wrap gap-3 items-start">
     <a href="?" class="{% if not status %}text-orange{% endif %}">All</a>

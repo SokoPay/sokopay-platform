@@ -10,7 +10,7 @@
     {% csrf_token %}
     <div>
       <label class="block text-sm mb-1">Phone</label>
-      <input name="phone" value="{{ form.phone.value|default:'' }}" placeholder="+233244058519"
+      <input name="phone" value="{{ form.phone.value|default:'' }}" placeholder="0244058519" inputmode="tel"
              class="w-full border border-gray-200 rounded-md px-3 py-2" autofocus>
     </div>
     <div>
@@ -22,8 +22,8 @@
       Sign in
     </button>
   </form>
-  <p class="text-xs text-ink/40 text-center mt-4">
-    Staff accounts require two-factor authentication (enrolment: next milestone).
-  </p>
+  <p class="text-sm text-center mt-4"><a href="{% url 'portal:password_forgot' %}" class="text-orange">Forgot password?</a></p>
+  <p class="text-sm text-ink/60 text-center mt-6">New to SokoPay? <a href="{% url 'portal:register' %}" class="text-orange">Register your business</a></p>
+  <p class="text-xs text-ink/40 text-center mt-4">After your password we'll ask for a one-time code (SMS or authenticator app).</p>
 </div>
 {% endblock %}

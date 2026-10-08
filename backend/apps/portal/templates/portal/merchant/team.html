@@ -1,0 +1,68 @@
+{% extends "portal/base.html" %}
+{% block title %}Team · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Team</h1>
+<p class="text-sm text-ink/60 mb-6">People who can use the portal and the Business app for {{ merchant.trading_name|default:merchant.legal_name }}.
+  Each person signs in with their own phone number; nobody shares a password.</p>
+
+<div class="grid lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Name</th><th>Phone</th><th>Role</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+      {% for m in members %}
+        <tr class="border-t border-gray-50 align-top">
+          <td class="px-4 py-2">{{ m.user.full_name|default:"—" }}{% if m.user_id == request.user.id %} <span class="text-ink/40">(you)</span>{% endif %}</td>
+          <td class="py-2">{{ m.user.phone }}</td>
+          <td class="py-2">
+            {% if m.editable %}
+            <form method="post" class="flex gap-1">{% csrf_token %}
+              <input type="hidden" name="action" value="role"><input type="hidden" name="member" value="{{ m.pk }}">
+              <select name="role" class="border border-gray-200 rounded-md px-2 py-1" onchange="this.form.submit()">
+                {% for value, label in roles %}<option value="{{ value }}" {% if m.role == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+              </select>
+            </form>
+            {% else %}{{ m.get_role_display }}{% endif %}
+          </td>
+          <td class="py-2">{% if m.has_password %}<span class="text-success">Active</span>{% else %}<span class="text-warning">Invited</span>{% endif %}</td>
+          <td class="px-4 py-2 text-right whitespace-nowrap">
+            {% if m.editable %}
+            <form method="post" class="inline">{% csrf_token %}
+              <input type="hidden" name="action" value="resend"><input type="hidden" name="member" value="{{ m.pk }}">
+              <button class="text-orange">{% if m.has_password %}Send password link{% else %}Resend invite{% endif %}</button>
+            </form>
+            <form method="post" class="inline ml-3">{% csrf_token %}
+              <input type="hidden" name="action" value="remove"><input type="hidden" name="member" value="{{ m.pk }}">
+              <button class="text-danger" onclick="return confirm('Remove {{ m.user.full_name|default:m.user.phone|escapejs }} from the team? They lose access immediately.')">Remove</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if manager %}
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-5 space-y-3 text-sm self-start">{% csrf_token %}
+    <input type="hidden" name="action" value="invite">
+    <h2 class="font-medium">Invite someone</h2>
+    <input name="full_name" required placeholder="Full name" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <input name="phone" required inputmode="tel" placeholder="Phone, e.g. 0244058519" class="w-full border border-gray-200 rounded-md px-3 py-2">
+    <select name="role" class="w-full border border-gray-200 rounded-md px-3 py-2">
+      {% for value, label in roles %}<option value="{{ value }}" {% if value == 'cashier' %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Send invite by SMS</button>
+    <ul class="text-xs text-ink/50 space-y-1 pt-1">
+      <li><strong>Admin</strong>: manages the team, API keys, webhooks and bulk-payment uploads; no settlements or refunds.</li>
+      <li><strong>Finance</strong>: settlements, refunds, disputes, bulk payments.</li>
+      <li><strong>Cashier</strong>: takes payments (QR and payment requests) and sees payments.</li>
+      <li><strong>Developer</strong>: test API keys and webhooks.</li>
+      <li>Owner, admin and finance must use 2FA at every sign-in.</li>
+    </ul>
+  </form>
+  {% else %}
+  <p class="text-sm text-ink/60">Only the owner or an admin can invite people or change roles.</p>
+  {% endif %}
+</div>
+{% endblock %}

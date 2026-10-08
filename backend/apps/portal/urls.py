@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views, views_bulk, views_compliance, views_merchant_ops, views_ops
+from . import views, views_bulk, views_compliance, views_merchant_ops, views_onboarding, views_ops
 
 app_name = "portal"
 
@@ -10,6 +10,11 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     path("2fa/", views.twofa, name="twofa"),
     path("security/", views.security_page, name="security"),
+    path("invite/<str:token>/", views_onboarding.invite_accept, name="invite_accept"),
+    path("password/forgot/", views_onboarding.password_forgot, name="password_forgot"),
+    path("password/reset/", views_onboarding.password_reset, name="password_reset"),
+    path("register/", views_onboarding.register, name="register"),
+    path("register/verify/", views_onboarding.register_verify, name="register_verify"),
 
     # Merchant portal
     path("", views.dashboard, name="dashboard"),
@@ -20,6 +25,7 @@ urlpatterns = [
     path("statements/", views_merchant_ops.statements_page, name="statements"),
     path("payment-links/", views_merchant_ops.payment_links, name="payment_links"),
     path("api-keys/", views.api_keys_view, name="api_keys"),
+    path("team/", views_onboarding.team, name="team"),
     path("settlements/", views.settlements_view, name="settlements"),
     path("qr/", views.qr_page, name="qr"),
     path("qr/<str:token>/", views.qr_request, name="qr_request"),
@@ -33,7 +39,10 @@ urlpatterns = [
     # Admin / back-office portal
     path("admin/", views.admin_dashboard, name="admin_dashboard"),
     path("admin/merchants/", views.merchant_queue, name="merchant_queue"),
+    path("admin/merchants/new/", views_onboarding.merchant_new, name="merchant_new"),
     path("admin/merchants/<uuid:pk>/", views.merchant_detail, name="merchant_detail"),
+    path("admin/merchants/<uuid:pk>/documents/<uuid:doc>/", views_onboarding.merchant_document,
+         name="merchant_document"),
     path("admin/settlements/", views.settlement_queue, name="settlement_queue"),
     path("admin/integrations/", views.integrations, name="integrations"),
     path("admin/safeguarding/", views.safeguarding, name="safeguarding"),

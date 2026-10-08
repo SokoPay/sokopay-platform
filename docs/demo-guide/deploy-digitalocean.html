@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet) (shared droplet)</title><style>
+<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet) (shared droplet) (shared droplet)</title><style>
 @page { size: A4; margin: 16mm 15mm; }
 body { font-family: 'Segoe UI', Arial, sans-serif; color:#231F20; font-size:9.6pt; line-height:1.42; }
 h1 { font-size:19pt; border-bottom:3px solid #F26522; padding-bottom:2mm; }
@@ -478,11 +478,44 @@ PORTAL_2FA_SMS=True
   docker compose run --rm web python manage.py demo_2fa_code +233200000004</code></li>
 <li><strong>Mock partner:</strong> <code>https://sokopay.theagbeko.com/dev/mock-partner/</code> approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.</li>
 </ul>
-<h3>12.4 USSD</h3>
+<h3>12.4 Adding real merchants, team members and agents</h3>
+<p>No shell commands are needed; everything is in the portal.</p>
+<table>
+<thead>
+<tr>
+<th>Who</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>A merchant, added by SokoPay</strong></td>
+<td>Back office, then <strong>Merchants</strong>, then <strong>+ Add merchant</strong> (operations or compliance staff). Enter the owner's name and phone, the business details, and upload documents (PDF, JPEG or PNG, up to 5 MB, stored encrypted). The owner gets an SMS with a link to set their own password (valid 3 days). Then <strong>Begin review</strong> and <strong>Approve</strong>; the owner is texted the result and their merchant code.</td>
+</tr>
+<tr>
+<td><strong>A merchant, applying on their own</strong></td>
+<td>They open <code>https://sokopay.theagbeko.com/dashboard/register/</code> (also linked from the sign-in page): business details, then a code by SMS, a password and optional documents. The application appears in <strong>Merchants</strong> for review. Set <code>MERCHANT_SELF_SIGNUP=False</code> in <code>.env</code> to hide the page.</td>
+</tr>
+<tr>
+<td><strong>A team member</strong> (admin, finance, cashier, developer)</td>
+<td>The merchant's owner or an admin opens <strong>Team</strong> in the merchant portal and enters the person's name, phone and role. They get an SMS invite to set their password. Owners and admins can change roles or remove people; removal takes effect immediately.</td>
+</tr>
+<tr>
+<td><strong>An agent</strong> (back office only)</td>
+<td>Back office, then <strong>Agents</strong>, then <strong>Add an agent</strong>: name, phone, kiosk name, location. New people get an account created for them; either way they're texted to install the Agent app and sign in with that number (SMS code, then they choose a PIN). They stay <strong>pending</strong> until you open the agent and click <strong>Activate</strong> after KYC checks.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Passwords:</strong> nobody ever types or sends someone else's password.
+- <strong>Forgot password:</strong> on the sign-in page, the user gets a reset code by SMS.
+- <strong>Change password:</strong> on the <strong>Security</strong> page.
+- <strong>Expired invite:</strong> staff can click <strong>Resend invite</strong> on the merchant's review page, or the owner can on the <strong>Team</strong> page.</p>
+<p><strong>Documents</strong> are kept in the <code>media</code> Docker volume, encrypted with <code>FIELD_ENCRYPTION_KEY</code>. <code>scripts/backup.sh</code> backs them up next to the database (<code>*.media.tgz</code>), and <code>wipe.sh</code> deletes them with everything else.</p>
+<h3>12.5 USSD</h3>
 <pre><code class="language-bash">curl -s -X POST &quot;https://sokopay.theagbeko.com/api/v1/ussd/callback?key=&lt;USSD_SHARED_SECRET from .env&gt;&quot; \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 </code></pre>
-<h3>12.5 Following the demo guide</h3>
+<h3>12.6 Following the demo guide</h3>
 <p>Every walkthrough in <code>docs/SokoPay-Demo-Guide.pdf</code> works on the server with these changes:
 - Use <code>https://sokopay.theagbeko.com</code> instead of <code>http://127.0.0.1:8000</code>.
 - Use the logins from the credentials file.

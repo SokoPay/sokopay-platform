@@ -1,0 +1,55 @@
+{% extends "portal/base.html" %}
+{% block title %}Add merchant · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:merchant_queue' %}" class="text-sm text-orange">← Merchants</a>
+<h1 class="text-xl font-semibold mt-2 mb-1">Add a merchant</h1>
+<p class="text-sm text-ink/60 mb-6 max-w-2xl">The business goes straight into the review queue. The owner gets an SMS
+  with a link to set their own password, valid for a few days; nobody else ever sees it. Approve the business after
+  checking the documents.</p>
+
+<form method="post" enctype="multipart/form-data" class="grid md:grid-cols-2 gap-4 max-w-4xl">
+  {% csrf_token %}
+  <div class="bg-surface rounded-lg shadow-sm p-5 space-y-3 text-sm">
+    <h2 class="font-medium">Owner</h2>
+    <label class="block">Full name
+      <input name="owner_name" required value="{{ data.owner_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <label class="block">Phone number <span class="text-ink/40">(receives the invite and sign-in codes)</span>
+      <input name="owner_phone" required value="{{ data.owner_phone|default:'' }}" placeholder="0244058519" inputmode="tel"
+             class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <p class="text-xs text-ink/50">If this number already uses the SokoPay customer app, the same account is used:
+      they keep their PIN and wallet, and gain portal access.</p>
+  </div>
+
+  <div class="bg-surface rounded-lg shadow-sm p-5 space-y-3 text-sm">
+    <h2 class="font-medium">Business</h2>
+    <label class="block">Legal name
+      <input name="legal_name" required value="{{ data.legal_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <label class="block">Trading name <span class="text-ink/40">(shown to customers)</span>
+      <input name="trading_name" value="{{ data.trading_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <label class="block">Type
+      <select name="business_type" required class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2">
+        {% for value, label in business_types %}<option value="{{ value }}" {% if data.business_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select></label>
+    <div class="grid grid-cols-3 gap-2">
+      <label class="block">Category<input name="category" value="{{ data.category|default:'' }}" placeholder="Groceries" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">TIN<input name="tin" value="{{ data.tin|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">Reg. no.<input name="registration_no" value="{{ data.registration_no|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    </div>
+  </div>
+
+  <div class="bg-surface rounded-lg shadow-sm p-5 space-y-3 text-sm md:col-span-2">
+    <h2 class="font-medium">Documents <span class="text-ink/40 font-normal">(PDF, JPEG or PNG, up to 5 MB each; stored encrypted)</span></h2>
+    <div class="grid md:grid-cols-2 gap-3">
+      {% for value, label in doc_kinds %}
+      <label class="block">{{ label }}
+        <input type="file" name="doc_{{ value }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+               class="mt-1 block w-full text-sm"></label>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="md:col-span-2">
+    <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-5 py-2">Add merchant and send invite</button>
+  </div>
+</form>
+{% endblock %}

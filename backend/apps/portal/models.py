@@ -1,6 +1,6 @@
 """
-Portal security records: 2FA backup codes, the SMS 2FA device and a security-event
-audit trail.
+Portal security records: 2FA backup codes, the SMS 2FA device, portal invites and a
+security-event audit trail.
 """
 
 from __future__ import annotations
@@ -45,6 +45,10 @@ class SecurityEvent(models.Model):
         TWOFA_RESET = "twofa_reset", "2FA reset by SokoPay staff"
         BACKUP_USED = "backup_used", "Backup code used to sign in"
         BACKUP_REGENERATED = "backup_regenerated", "Backup codes regenerated"
+        INVITE_SENT = "invite_sent", "Portal invite sent"
+        PASSWORD_SET = "password_set", "Password set from an invite"
+        PASSWORD_RESET = "password_reset", "Password reset with an SMS code"
+        PASSWORD_CHANGED = "password_changed", "Password changed"
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL,
                              null=True, blank=True, related_name="security_events")
@@ -101,3 +105,33 @@ class SmsDevice(Device):
             return otp.verify_otp(self.user.phone, token, purpose=self.PURPOSE)
         except otp.OtpError:
             return False
+
+
+class PortalInvite(TimeStampedModel):
+    """
+    A one-time link that lets an invited person set their own portal password: a
+    merchant owner added by staff, or a team member added by an owner or admin. Nobody
+    else ever sees or sends the password.
+
+    Only a SHA-256 hash of the token is stored; the raw token exists only in the SMS.
+    It expires after PORTAL_INVITE_TTL_HOURS, works once, and a newer invite for the
+    same person cancels any older ones.
+    """
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                             related_name="portal_invites")
+    merchant = models.ForeignKey("merchants.Merchant", on_delete=models.CASCADE, null=True, blank=True,
+                                 related_name="+")
+    role = models.CharField(max_length=16, blank=True)
+    token_hash = models.CharField(max_length=64, unique=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True,
+                                   blank=True, related_name="+")
+
+    class Meta:
+        db_table = "portal_invite"
+        indexes = [models.Index(fields=["user", "used_at"])]
+
+    def __str__(self) -> str:
+        return f"Invite for {self.user_id} ({'used' if self.used_at else 'open'})"

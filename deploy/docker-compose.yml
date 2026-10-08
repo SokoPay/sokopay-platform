@@ -32,6 +32,7 @@ x-app: &app
       required: false          # absent when COMPOSE_PROFILES doesn't include "localdb"
     redis:
       condition: service_healthy
+  volumes: [media:/app/media]  # merchant KYB documents (encrypted with FIELD_ENCRYPTION_KEY)
   networks: [internal]
 
 services:
@@ -114,6 +115,7 @@ services:
     networks: [internal]
 
 volumes:
+  media:
   pgdata:
   redisdata:
   caddy_data:

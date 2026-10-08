@@ -1,0 +1,40 @@
+{% extends "portal/base.html" %}
+{% block title %}Register your business · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto mt-10">
+  <h1 class="text-xl font-semibold mb-1">Register your business</h1>
+  <p class="text-sm text-ink/60 mb-6">Accept payments with SokoPay: QR codes, payment links and online checkout. Tell us
+    about your business; we'll text you a code to confirm your number, then review your application.</p>
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-6 space-y-3 text-sm">
+    {% csrf_token %}
+    <h2 class="font-medium">You</h2>
+    <div class="grid md:grid-cols-2 gap-3">
+      <label class="block">Full name
+        <input name="full_name" required value="{{ data.full_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">Phone number
+        <input name="phone" required inputmode="tel" value="{{ data.phone|default:'' }}" placeholder="0244058519"
+               class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    </div>
+    <h2 class="font-medium pt-2">Your business</h2>
+    <label class="block">Legal name
+      <input name="legal_name" required value="{{ data.legal_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <div class="grid md:grid-cols-2 gap-3">
+      <label class="block">Trading name <span class="text-ink/40">(optional)</span>
+        <input name="trading_name" value="{{ data.trading_name|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">Type
+        <select name="business_type" required class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2">
+          {% for value, label in business_types %}<option value="{{ value }}" {% if data.business_type == value %}selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select></label>
+    </div>
+    <div class="grid grid-cols-3 gap-2">
+      <label class="block">Category<input name="category" value="{{ data.category|default:'' }}" placeholder="Groceries" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">TIN<input name="tin" value="{{ data.tin|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">Reg. no.<input name="registration_no" value="{{ data.registration_no|default:'' }}" class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    </div>
+    <p class="text-xs text-ink/50">By continuing you agree to the <a class="underline" href="/legal/merchant-terms" target="_blank">merchant agreement</a>
+      and the <a class="underline" href="/legal/privacy-policy" target="_blank">privacy notice</a>.</p>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Continue</button>
+  </form>
+  <p class="text-xs text-ink/40 mt-4 text-center">Already registered? <a href="{% url 'portal:login' %}" class="underline">Sign in</a></p>
+</div>
+{% endblock %}

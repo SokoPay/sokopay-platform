@@ -1,0 +1,16 @@
+{% extends "portal/base.html" %}
+{% block title %}Invite link · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-16 text-center">
+  {% if blocked %}
+  <h1 class="text-xl font-semibold mb-2">Too many attempts</h1>
+  <p class="text-sm text-ink/60">Please wait 15 minutes and try the link from your SMS again.</p>
+  {% else %}
+  <h1 class="text-xl font-semibold mb-2">This link has expired or was already used</h1>
+  <p class="text-sm text-ink/60">Ask the person who invited you (or SokoPay support) to send a new invite.
+    If you've already set your password, just sign in.</p>
+  {% endif %}
+  <p class="mt-6 text-sm"><a href="{% url 'portal:login' %}" class="text-orange">Go to sign in</a> ·
+    <a href="{% url 'portal:password_forgot' %}" class="text-orange">Forgot password</a></p>
+</div>
+{% endblock %}

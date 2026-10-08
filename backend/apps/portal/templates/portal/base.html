@@ -56,6 +56,7 @@
           <a href="{% url 'portal:webhooks' %}" class="hover:text-orange">Webhooks</a>
           <a href="{% url 'portal:statements' %}" class="hover:text-orange">Statements</a>
           <a href="{% url 'portal:api_keys' %}" class="hover:text-orange">Developers</a>
+          <a href="{% url 'portal:team' %}" class="hover:text-orange">Team</a>
         {% endif %}
         <a href="{% url 'portal:security' %}" class="hover:text-orange">Security</a>
         <span class="opacity-60">{{ user.full_name|default:user.phone }}</span>

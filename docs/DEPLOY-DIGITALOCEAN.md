@@ -418,14 +418,32 @@ docker compose logs web | grep "SMS:console" | tail -5
   ```
 - **Mock partner:** `https://sokopay.theagbeko.com/dev/mock-partner/` approves MoMo prompts and payouts. On the server it needs the superuser, signed in with 2FA.
 
-### 12.4 USSD
+### 12.4 Adding real merchants, team members and agents
+
+No shell commands are needed; everything is in the portal.
+
+| Who | How |
+|---|---|
+| **A merchant, added by SokoPay** | Back office, then **Merchants**, then **+ Add merchant** (operations or compliance staff). Enter the owner's name and phone, the business details, and upload documents (PDF, JPEG or PNG, up to 5 MB, stored encrypted). The owner gets an SMS with a link to set their own password (valid 3 days). Then **Begin review** and **Approve**; the owner is texted the result and their merchant code. |
+| **A merchant, applying on their own** | They open `https://sokopay.theagbeko.com/dashboard/register/` (also linked from the sign-in page): business details, then a code by SMS, a password and optional documents. The application appears in **Merchants** for review. Set `MERCHANT_SELF_SIGNUP=False` in `.env` to hide the page. |
+| **A team member** (admin, finance, cashier, developer) | The merchant's owner or an admin opens **Team** in the merchant portal and enters the person's name, phone and role. They get an SMS invite to set their password. Owners and admins can change roles or remove people; removal takes effect immediately. |
+| **An agent** (back office only) | Back office, then **Agents**, then **Add an agent**: name, phone, kiosk name, location. New people get an account created for them; either way they're texted to install the Agent app and sign in with that number (SMS code, then they choose a PIN). They stay **pending** until you open the agent and click **Activate** after KYC checks. |
+
+**Passwords:** nobody ever types or sends someone else's password.
+- **Forgot password:** on the sign-in page, the user gets a reset code by SMS.
+- **Change password:** on the **Security** page.
+- **Expired invite:** staff can click **Resend invite** on the merchant's review page, or the owner can on the **Team** page.
+
+**Documents** are kept in the `media` Docker volume, encrypted with `FIELD_ENCRYPTION_KEY`. `scripts/backup.sh` backs them up next to the database (`*.media.tgz`), and `wipe.sh` deletes them with everything else.
+
+### 12.5 USSD
 
 ```bash
 curl -s -X POST "https://sokopay.theagbeko.com/api/v1/ussd/callback?key=<USSD_SHARED_SECRET from .env>" \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 ```
 
-### 12.5 Following the demo guide
+### 12.6 Following the demo guide
 
 Every walkthrough in `docs/SokoPay-Demo-Guide.pdf` works on the server with these changes:
 - Use `https://sokopay.theagbeko.com` instead of `http://127.0.0.1:8000`.

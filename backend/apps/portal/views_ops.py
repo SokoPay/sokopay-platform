@@ -39,18 +39,35 @@ def _ghs(minor) -> str:
 # --- agents ----------------------------------------------------------------------------------
 @staff_role_required("operations")
 def agents_list(request):
+    """
+    Agents are only ever added here, by back-office operations staff. A new person gets
+    an account created for them; either way they're registered as a PENDING agent and
+    texted how to start (install the Agent app, sign in with this number). Activation
+    stays a separate step after KYC checks.
+    """
     if request.method == "POST":
-        from apps.wallet.accounts_lookup import AccountNotFound, resolve_account
+        from apps.notifications.sms import get_sms_provider
+
+        from . import enrolment
         try:
-            user = resolve_account(request.POST.get("phone", ""))
-            agent = agents.register_agent(user=user, display_name=request.POST.get("display_name", "").strip()
-                                          or user.full_name or user.phone,
-                                          location=request.POST.get("location", "").strip())
-            messages.success(request, f"{agent.display_name} registered (pending). Activate after KYC checks.")
-            return redirect("portal:ops_agent", pk=agent.pk)
-        except (AccountNotFound, AgentError) as exc:
+            agent, created = enrolment.staff_add_agent(
+                actor=request.user, phone=request.POST.get("phone", ""),
+                full_name=request.POST.get("full_name", ""),
+                display_name=request.POST.get("display_name", ""),
+                location=request.POST.get("location", ""))
+        except (enrolment.EnrolmentError, AgentError) as exc:
             messages.error(request, str(exc))
-        return redirect("portal:ops_agents")
+            return redirect("portal:ops_agents")
+        first = (agent.user.full_name or "").split(" ")[0] or "Hello"
+        sms = get_sms_provider().send(
+            agent.user.phone,
+            f"SokoPay: {first}, you've been registered as a SokoPay agent ({agent.display_name}). "
+            f"Install the SokoPay Agent app and sign in with this number. "
+            f"We'll let you know when your agent account is active.")
+        note = "" if sms.success else " The welcome SMS couldn't be sent."
+        messages.success(request, f"{agent.display_name} registered (pending){' — new account created' if created else ''}. "
+                                  f"Activate after KYC checks.{note}")
+        return redirect("portal:ops_agent", pk=agent.pk)
     qs = Agent.objects.select_related("user").order_by("-created_at")
     status = request.GET.get("status")
     if status in Agent.Status.values:

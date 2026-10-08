@@ -1,7 +1,10 @@
 {% extends "portal/base.html" %}
 {% block title %}Merchant review · SokoPay{% endblock %}
 {% block content %}
-<h1 class="text-xl font-semibold mb-4">Merchant review queue</h1>
+<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+  <h1 class="text-xl font-semibold">Merchant review queue</h1>
+  <a href="{% url 'portal:merchant_new' %}" class="bg-orange hover:bg-orange-dark text-white rounded-md px-4 py-2 text-sm">+ Add merchant</a>
+</div>
 <div class="bg-surface rounded-lg shadow-sm overflow-hidden">
   <table class="w-full text-sm">
     <thead class="text-ink/50 text-left">

@@ -1,0 +1,21 @@
+{% extends "portal/base.html" %}
+{% block title %}Set your password · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-sm mx-auto mt-16">
+  <h1 class="text-xl font-semibold mb-2">Welcome to SokoPay</h1>
+  <p class="text-sm text-ink/60 mb-6">You've been added to the business portal for <strong>{{ business }}</strong>.
+    Choose a password for <span class="font-medium">{{ phone }}</span>.</p>
+  <form method="post" class="bg-surface rounded-lg shadow-sm p-6 space-y-3 text-sm">
+    {% csrf_token %}
+    <label class="block">New password
+      <input name="password1" type="password" required autocomplete="new-password" autofocus
+             class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <label class="block">Repeat it
+      <input name="password2" type="password" required autocomplete="new-password"
+             class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    <p class="text-xs text-ink/50">At least 10 characters, not a common password, not all numbers.</p>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Set password</button>
+  </form>
+  <p class="text-xs text-ink/50 mt-4">Next you'll sign in with your phone number and this password, then a code by SMS.</p>
+</div>
+{% endblock %}

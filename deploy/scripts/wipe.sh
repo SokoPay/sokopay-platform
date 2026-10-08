@@ -12,7 +12,7 @@ docker compose --profile localdb --profile caddy ps
 read -r -p 'Type WIPE SOKOPAY to continue: ' answer
 [ "$answer" = "WIPE SOKOPAY" ] || { echo "Cancelled."; exit 1; }
 
-# Containers, networks and the project's named volumes (pgdata, redisdata, caddy_*),
+# Containers, networks and the project's named volumes (pgdata, redisdata, media, caddy_*),
 # plus the image this project built. --rmi local never removes shared images such as
 # postgres:16 or redis:7 that another project might use.
 docker compose --profile localdb --profile caddy down --volumes --remove-orphans --rmi local

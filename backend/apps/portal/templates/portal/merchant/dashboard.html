@@ -4,6 +4,18 @@
 {% block content %}
 <h1 class="text-xl font-semibold mb-1">{{ merchant.trading_name|default:merchant.legal_name }}</h1>
 <p class="text-sm text-ink/60 mb-6 capitalize">Status: {{ merchant.get_status_display }}</p>
+{% if merchant.status != 'approved' %}
+<div class="bg-surface border-l-4 border-orange rounded-md p-4 mb-6 text-sm">
+  {% if merchant.status == 'rejected' %}
+    <strong>Your application wasn't approved yet.</strong> {{ merchant.rejection_reason }} Contact SokoPay support to continue.
+  {% elif merchant.status == 'suspended' %}
+    <strong>This account is suspended.</strong> Contact SokoPay support.
+  {% else %}
+    <strong>Your application is being reviewed.</strong> We'll text you the result. Meanwhile you can invite your
+    <a href="{% url 'portal:team' %}" class="text-orange">team</a>; payments start once you're approved.
+  {% endif %}
+</div>
+{% endif %}
 
 <div class="grid sm:grid-cols-2 gap-4 mb-8">
   <div class="bg-surface rounded-lg shadow-sm p-5">

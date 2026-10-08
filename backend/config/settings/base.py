@@ -183,6 +183,9 @@ USE_TZ = True
 # ---------------------------------------------------------------------------
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+# Uploaded files (merchant KYB documents). Encrypted on disk and never served directly:
+# staff download them through an access-checked view. In Docker this is a named volume.
+MEDIA_ROOT = env("MEDIA_ROOT", default=str(BASE_DIR / "media"))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
@@ -444,3 +447,7 @@ OTP_TTL_SECONDS = env.int("OTP_TTL_SECONDS", default=10 * 60)
 # Portal 2FA by SMS: the 2FA page texts a code to the user's phone. Authenticator-app
 # and backup codes keep working alongside it. On by default on servers (hardened.py).
 PORTAL_2FA_SMS = env.bool("PORTAL_2FA_SMS", default=False)
+# Invite links (set your portal password) sent by SMS stay valid this long.
+PORTAL_INVITE_TTL_HOURS = env.int("PORTAL_INVITE_TTL_HOURS", default=72)
+# Public merchant sign-up at /dashboard/register/ (applications wait for staff review).
+MERCHANT_SELF_SIGNUP = env.bool("MERCHANT_SELF_SIGNUP", default=True)

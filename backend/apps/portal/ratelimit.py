@@ -33,7 +33,14 @@ DEFAULT_RULES: dict[str, tuple[int, int]] = {
     "login_phone": (5, 15 * 60),        # wrong passwords for one phone
     "login_ip": (30, 15 * 60),          # wrong passwords from one IP (credential stuffing)
     "twofa_user": (5, 15 * 60),         # wrong 2FA / backup codes for one user
+    "invite_ip": (20, 15 * 60),         # invalid invite links from one IP (token guessing)
+    "pw_reset_phone": (5, 15 * 60),     # wrong password-reset codes for one phone
+    # actions (per IP: public pages)
+    "pw_reset_request_ip": (10, 60 * 60),
+    "register_ip": (5, 60 * 60),
     # actions (per user)
+    "team_invite": (20, 60 * 60),
+    "password_change": (10, 60 * 60),
     "bulk_upload": (20, 60 * 60),
     "api_key_create": (10, 60 * 60),
     "qr_request": (120, 60 * 60),

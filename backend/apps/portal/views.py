@@ -18,10 +18,12 @@ import time
 import segno
 from django.conf import settings
 from django.contrib import messages
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
+from django.core.exceptions import ValidationError
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django_otp import login as otp_login
 from django_otp import match_token
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -34,8 +36,9 @@ from apps.merchants import api_keys, onboarding, settlement
 from apps.merchants.exceptions import ApprovalError, MerchantError, SettlementError
 from apps.merchants.models import ApiKey, Merchant, Settlement, SettlementAccount
 from apps.payments.models import Payment
+from apps.wallet.accounts_lookup import normalise_phone
 
-from . import ratelimit, security
+from . import invites, ratelimit, security
 from .decorators import merchant_required, staff_required
 from .forms import LoginForm, RequestSettlementForm, SettlementAccountForm
 from .models import SecurityEvent, SmsDevice
@@ -62,9 +65,10 @@ LOCKED_MESSAGE = "Too many attempts. Wait 15 minutes, then try again."
 def login_view(request):
     if request.user.is_authenticated:
         return _home_redirect(request.user)
-    form = LoginForm(request.POST or None)
+    form = LoginForm(request.POST or None, initial={"phone": request.GET.get("phone", "")})
     if request.method == "POST" and form.is_valid():
-        phone = form.cleaned_data["phone"].strip()
+        raw = form.cleaned_data["phone"].strip()
+        phone = normalise_phone(raw) or raw            # 0244 058 519 and +233244058519 both work
         ip = ratelimit.client_ip(request)
         # Check the lock BEFORE the password, so a locked account can't be used as an
         # oracle ("locked" for right guesses vs "wrong" for wrong ones).
@@ -274,8 +278,26 @@ def _security(request):
                         ip=ratelimit.client_ip(request))
         return render(request, "portal/twofa_backup_codes.html", {"codes": codes})
 
+    if request.method == "POST" and request.POST.get("action") == "change_password":
+        if not ratelimit.allow("password_change", str(user.id)):
+            messages.error(request, LOCKED_MESSAGE)
+        elif request.POST.get("new1", "") != request.POST.get("new2", ""):
+            messages.error(request, "The two new passwords don't match.")
+        else:
+            try:
+                invites.change_password(user, request.POST.get("current", ""), request.POST.get("new1", ""),
+                                        ip=ratelimit.client_ip(request))
+            except (invites.InviteError, ValidationError) as exc:
+                messages.error(request, " ".join(exc.messages) if isinstance(exc, ValidationError) else str(exc))
+            else:
+                update_session_auth_hash(request, user)      # stay signed in here; other sessions end
+                messages.success(request, "Password changed.")
+        return redirect("portal:security")
+
     role = getattr(request, "merchant_role", None)
     return render(request, "portal/security.html", {
+        "sms_2fa": _sms_2fa(user),
+        "phone_hint": _phone_hint(user.phone),
         "enrolled": enrolled,
         "required": security.needs_2fa(user, role) if not enrolled else True,
         "role_requires": getattr(user, "user_type", None) == "staff"
@@ -564,6 +586,20 @@ def merchant_queue(request):
     return render(request, "portal/admin/merchant_queue.html", {"merchants": merchants})
 
 
+def _tell_owner(request, merchant, *, approved: bool) -> None:
+    """SMS the owner the review outcome (best effort; the decision stands either way)."""
+    from apps.notifications.sms import get_sms_provider
+    name = merchant.trading_name or merchant.legal_name
+    if approved:
+        text = (f"SokoPay: good news, {name} is approved. Sign in at "
+                f"{request.build_absolute_uri(reverse('portal:login'))} to add your settlement account "
+                f"and start taking payments. Your merchant code is {merchant.short_code}.")
+    else:
+        text = (f"SokoPay: we couldn't approve {name} yet. Reason: {merchant.rejection_reason or 'see the portal'}. "
+                f"Sign in at {request.build_absolute_uri(reverse('portal:login'))} or contact SokoPay support.")
+    get_sms_provider().send(merchant.owner.phone, text)
+
+
 @staff_required
 def merchant_detail(request, pk):
     merchant = get_object_or_404(Merchant, pk=pk)
@@ -578,16 +614,24 @@ def merchant_detail(request, pk):
             messages.success(request, f"2FA reset for {member.user.full_name or member.user.phone}. "
                                       "They will set it up again at next sign-in.")
             return redirect("portal:merchant_detail", pk=merchant.pk)
+        if action == "resend_invite":
+            from .views_onboarding import send_member_invite
+            member = get_object_or_404(merchant.members.select_related("user"),
+                                       pk=request.POST.get("member"))
+            send_member_invite(request, member.user, merchant, member.role)
+            return redirect("portal:merchant_detail", pk=merchant.pk)
         try:
             if action == "begin_review":
                 onboarding.begin_review(merchant)
             elif action == "approve":
                 onboarding.approve(merchant, risk_tier=request.POST.get("risk_tier", "medium"))
                 audit("merchant.approve", actor=request.user, obj=merchant, risk_tier=request.POST.get("risk_tier", "medium"))
+                _tell_owner(request, merchant, approved=True)
                 messages.success(request, f"{merchant} approved.")
             elif action == "reject":
                 onboarding.reject(merchant, reason=request.POST.get("reason", ""))
                 audit("merchant.reject", actor=request.user, obj=merchant, reason=request.POST.get("reason", ""))
+                _tell_owner(request, merchant, approved=False)
                 messages.success(request, f"{merchant} rejected.")
         except Exception as exc:  # InvalidTransition etc. — surface to the reviewer
             messages.error(request, str(exc))
@@ -595,6 +639,7 @@ def merchant_detail(request, pk):
     members = list(merchant.members.select_related("user"))
     for mem in members:
         mem.has_2fa = security.has_confirmed_device(mem.user)
+        mem.has_password = mem.user.has_usable_password()
     return render(request, "portal/admin/merchant_detail.html",
                   {"m": merchant, "documents": merchant.documents.all(), "members": members})
 

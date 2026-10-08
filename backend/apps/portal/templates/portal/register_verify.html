@@ -1,0 +1,38 @@
+{% extends "portal/base.html" %}
+{% block title %}Confirm and submit · SokoPay{% endblock %}
+{% block content %}
+<div class="max-w-xl mx-auto mt-10">
+  <a href="{% url 'portal:register' %}" class="text-sm text-orange">← Edit details</a>
+  <h1 class="text-xl font-semibold mt-2 mb-1">Confirm your number and submit</h1>
+  <p class="text-sm text-ink/60 mb-6">We've sent a 6-digit code by SMS to <span class="font-medium">{{ application.phone }}</span>.
+    It expires in {{ minutes }} minutes. Application for <strong>{{ application.trading_name|default:application.legal_name }}</strong>.</p>
+  <form method="post" enctype="multipart/form-data" class="bg-surface rounded-lg shadow-sm p-6 space-y-3 text-sm">
+    {% csrf_token %}
+    <label class="block">Code from the SMS
+      <input name="code" required inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" autofocus
+             class="mt-1 w-40 text-center text-xl tracking-widest border border-gray-200 rounded-md px-3 py-2"></label>
+    <div class="grid md:grid-cols-2 gap-3">
+      <label class="block">Choose a password
+        <input name="password1" type="password" required autocomplete="new-password"
+               class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+      <label class="block">Repeat it
+        <input name="password2" type="password" required autocomplete="new-password"
+               class="mt-1 w-full border border-gray-200 rounded-md px-3 py-2"></label>
+    </div>
+    <p class="text-xs text-ink/50">At least 10 characters, not a common password, not all numbers.</p>
+    <h2 class="font-medium pt-2">Documents <span class="text-ink/40 font-normal">(optional now, needed before approval; PDF, JPEG or PNG, up to 5 MB)</span></h2>
+    <div class="grid md:grid-cols-2 gap-3">
+      {% for value, label in doc_kinds %}
+      <label class="block">{{ label }}
+        <input type="file" name="doc_{{ value }}" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+               class="mt-1 block w-full text-sm"></label>
+      {% endfor %}
+    </div>
+    <button class="w-full bg-orange hover:bg-orange-dark text-white rounded-md py-2">Submit application</button>
+  </form>
+  <form method="post" class="mt-3 text-center">{% csrf_token %}
+    <input type="hidden" name="action" value="resend">
+    <button class="text-sm text-orange hover:underline">Didn't get it? Send a new code</button>
+  </form>
+</div>
+{% endblock %}

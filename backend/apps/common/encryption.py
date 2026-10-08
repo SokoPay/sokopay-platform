@@ -34,6 +34,20 @@ def encrypt(value: str) -> str:
     return Fernet(_key()).encrypt(value.encode()).decode()
 
 
+def encrypt_bytes(data: bytes) -> bytes:
+    """Encrypt a file's contents (e.g. a KYB document) with the field-encryption key."""
+    return Fernet(_key()).encrypt(data)
+
+
+def decrypt_bytes(token: bytes) -> bytes:
+    try:
+        return Fernet(_key()).decrypt(token)
+    except InvalidToken as exc:
+        raise ImproperlyConfigured(
+            "Could not decrypt a file — FIELD_ENCRYPTION_KEY may have changed."
+        ) from exc
+
+
 def decrypt(token: str) -> str:
     try:
         return Fernet(_key()).decrypt(token.encode()).decode()
