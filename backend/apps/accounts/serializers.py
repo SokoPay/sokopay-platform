@@ -51,6 +51,8 @@ class PinResetSerializer(serializers.Serializer):
 class ProfileSerializer(serializers.Serializer):
     full_name = serializers.CharField(max_length=150, required=False)
     email = serializers.CharField(max_length=254, required=False, allow_blank=True)
+    address = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    gps_address = serializers.CharField(max_length=20, required=False, allow_blank=True)
 
 
 class CloseAccountSerializer(serializers.Serializer):

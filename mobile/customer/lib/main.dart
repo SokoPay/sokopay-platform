@@ -12,6 +12,7 @@ import 'features/cashout/allow_cashout_screen.dart';
 import 'features/cross_border/cross_border_screen.dart';
 import 'features/data/data_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/kyc/id_document_screen.dart';
 import 'features/kyc/kyc_screen.dart';
 import 'features/lifestyle/lifestyle_screen.dart';
 import 'features/marketplace/marketplace_screen.dart';
@@ -70,7 +71,7 @@ Future<void> main() async {
 
 GoRouter buildRouter(AuthController auth) => GoRouter(
       initialLocation: '/',
-      refreshListenable: auth,
+      refreshListenable: auth.session, // sign-in/out only (see AuthController.session)
       redirect: (context, state) {
         final signedIn = auth.signedIn;
         final loc = state.matchedLocation;
@@ -92,7 +93,8 @@ GoRouter buildRouter(AuthController auth) => GoRouter(
         ),
         GoRoute(path: '/forgot-pin', builder: (_, s) => ForgotPinScreen(phone: s.extra as String?)),
         GoRoute(path: '/change-pin', builder: (_, __) => const ChangePinScreen()),
-        GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
+        GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen(documentsRoute: '/id-documents')),
+        GoRoute(path: '/id-documents', builder: (_, __) => const IdDocumentScreen()),
         GoRoute(path: '/close-account', builder: (_, __) => const CloseAccountScreen()),
         GoRoute(
           path: '/pin-set',

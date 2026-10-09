@@ -51,7 +51,7 @@ Future<void> main() async {
 
 GoRouter buildRouter(AuthController auth) => GoRouter(
       initialLocation: '/',
-      refreshListenable: auth,
+      refreshListenable: auth.session, // sign-in/out only (see AuthController.session)
       redirect: (context, state) {
         final loc = state.matchedLocation;
         final onAuthFlow = const {'/', '/otp', '/pin-login', '/forgot-pin'}.contains(loc);

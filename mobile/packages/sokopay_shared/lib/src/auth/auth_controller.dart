@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/scheduler.dart';
 
 import '../core/api_client.dart';
 import '../core/token_store.dart';
@@ -14,8 +15,14 @@ class AuthController extends ChangeNotifier {
 
   bool loading = false;
   String? error;
-  bool signedIn = false;
   Map<String, dynamic>? me;
+
+  /// Changes only when someone signs in or out. The routers listen to this, NOT to the
+  /// controller: loading/error changes must never re-run a router's redirect (doing that
+  /// while a page is being built crashes it, which is what broke the Profile screen).
+  final ValueNotifier<bool> session = ValueNotifier<bool>(false);
+  bool get signedIn => session.value;
+  set signedIn(bool value) => session.value = value;
 
   Future<void> bootstrap() async {
     signedIn = await _tokens.hasSession;
@@ -97,18 +104,25 @@ class AuthController extends ChangeNotifier {
         return true;
       })) ?? false;
 
-  Future<Map<String, dynamic>?> loadProfile() => _guard(() async =>
-      Map<String, dynamic>.from((await _api.get('/auth/profile')).data));
+  /// GET /auth/profile. Throws on failure so the screen can show its own retry, and
+  /// doesn't touch [loading]/[error] (safe to call while a screen is opening).
+  Future<Map<String, dynamic>> fetchProfile() async =>
+      Map<String, dynamic>.from((await _api.get('/auth/profile')).data as Map);
 
-  Future<bool> saveProfile({String? fullName, String? email}) async =>
-      (await _guard(() async {
-        await _api.patch('/auth/profile', data: {
+  /// PATCH /auth/profile. Returns the updated profile, or null (message in [error]).
+  /// The phone number isn't editable: it's the identity the customer signs in with.
+  Future<Map<String, dynamic>?> saveProfile(
+          {String? fullName, String? email, String? address, String? gpsAddress}) =>
+      _guard(() async {
+        final r = await _api.patch('/auth/profile', data: {
           if (fullName != null) 'full_name': fullName,
           if (email != null) 'email': email,
+          if (address != null) 'address': address,
+          if (gpsAddress != null) 'gps_address': gpsAddress,
         });
         await loadMe();
-        return true;
-      })) ?? false;
+        return Map<String, dynamic>.from(r.data as Map);
+      });
 
   /// Close the account (PIN required). On success the session ends on this phone too.
   Future<bool> closeAccount(String pin, String reason) async {
@@ -162,7 +176,7 @@ class AuthController extends ChangeNotifier {
   Future<T?> _guard<T>(Future<T> Function() action) async {
     loading = true;
     error = null;
-    notifyListeners();
+    _notifySafely();
     try {
       return await action();
     } on DioException catch (e) {
@@ -172,6 +186,17 @@ class AuthController extends ChangeNotifier {
       return null;
     } finally {
       loading = false;
+      _notifySafely();
+    }
+  }
+
+  /// notifyListeners, but never in the middle of a frame being built (e.g. when a screen
+  /// starts a request from initState): then it waits for the frame to finish.
+  void _notifySafely() {
+    final binding = SchedulerBinding.instance;
+    if (binding.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      binding.addPostFrameCallback((_) => notifyListeners());
+    } else {
       notifyListeners();
     }
   }

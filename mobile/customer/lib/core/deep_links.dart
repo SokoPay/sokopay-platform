@@ -9,6 +9,7 @@ import 'package:sokopay_shared/sokopay_shared.dart';
 ///   {"type": "transfer", "reference": "SP-…"} → /transfer
 ///   {"type": "marketplace"}                   → /marketplace
 ///   {"type": "cashout_request", "request": …} → /cashout  (approve an agent's cash-out)
+///   {"type": "profile"}                       → /profile   (an ID document was reviewed)
 /// Unknown types → null (a push tap then opens the inbox, where the message is kept).
 /// References are validated; a path from the payload is never used.
 String? routeForPush(Map<String, dynamic> data) {
@@ -24,6 +25,8 @@ String? routeForPush(Map<String, dynamic> data) {
       return '/marketplace';
     case 'cashout_request':
       return '/cashout';
+    case 'profile':
+      return '/profile';
     default:
       return null;
   }

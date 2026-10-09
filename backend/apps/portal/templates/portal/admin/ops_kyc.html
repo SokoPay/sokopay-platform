@@ -9,6 +9,17 @@
   <button name="action" value="hold" class="border border-danger text-danger rounded-md px-3 py-2">Place hold</button>
   <button name="action" value="release" class="border border-success text-success rounded-md px-3 py-2">Release hold</button>
 </form>
+<h2 class="font-medium mb-2">ID documents to review</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto mb-8"><table class="w-full text-sm">
+  <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Customer</th><th>Phone</th><th>Document</th><th>Expires</th><th>Added</th><th></th></tr></thead>
+  <tbody>{% for d in to_review %}<tr class="border-t border-gray-50">
+    <td class="px-4 py-2">{{ d.user.full_name|default:"—" }}</td><td>{{ d.user.phone }}</td>
+    <td>{{ d.get_doc_type_display }} ••{{ d.number_last4 }}</td><td>{{ d.expiry_date|date:"d M Y"|default:"—" }}</td>
+    <td>{{ d.created_at|date:"d M Y, H:i" }}</td>
+    <td class="px-4 text-right"><a class="text-orange" href="{% url 'portal:ops_kyc_document' d.pk %}">Review →</a></td></tr>
+  {% empty %}<tr><td colspan="6" class="px-4 py-6 text-center text-ink/40">Nothing waiting. Ghana Cards are checked with NIA automatically.</td></tr>{% endfor %}</tbody>
+</table></div>
+
 <h2 class="font-medium mb-2">Wallets on hold</h2>
 <div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm">
   <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Since</th><th>Customer</th><th>Reason</th><th>By</th></tr></thead>

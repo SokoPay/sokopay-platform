@@ -11,6 +11,8 @@ Flow for the mobile app:
 
 from __future__ import annotations
 
+import re
+
 from datetime import timedelta
 
 from django.contrib.auth import get_user_model
@@ -139,7 +141,22 @@ def reset_pin(*, phone: str, code: str, new_pin: str, ghana_card: str = "") -> t
 
 
 # --- profile -------------------------------------------------------------------------
-def update_profile(user, *, full_name: str | None = None, email: str | None = None):
+_GPS_RE = re.compile(r"^([A-Z]{2})(\d{3,4})(\d{4})$")
+
+
+def normalise_gps(value: str) -> str:
+    """Ghana Post GPS digital address → canonical "GA-183-8164" ("" stays "")."""
+    compact = re.sub(r"[\s-]", "", (value or "").upper())
+    if not compact:
+        return ""
+    m = _GPS_RE.match(compact)
+    if not m:
+        raise AuthError("Enter your Ghana Post GPS address like GA-183-8164 (it's in the GhanaPostGPS app).")
+    return "-".join(m.groups())
+
+
+def update_profile(user, *, full_name: str | None = None, email: str | None = None,
+                   address: str | None = None, gps_address: str | None = None):
     from django.core.exceptions import ValidationError
     from django.core.validators import validate_email
     fields = []
@@ -164,6 +181,15 @@ def update_profile(user, *, full_name: str | None = None, email: str | None = No
                 raise AuthError("Enter a valid email address.") from exc
         user.email = email
         fields.append("email")
+    if address is not None:
+        address = " ".join(address.split())
+        if address and (len(address) < 5 or not any(ch.isalpha() for ch in address)):
+            raise AuthError("Enter your house number, street and town.")
+        user.address = address[:255]
+        fields.append("address")
+    if gps_address is not None:
+        user.gps_address = normalise_gps(gps_address)
+        fields.append("gps_address")
     if fields:
         user.save(update_fields=[*fields, "updated_at"])
         if "full_name" in fields:

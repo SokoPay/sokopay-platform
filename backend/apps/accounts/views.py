@@ -169,14 +169,23 @@ class PinResetView(APIView):
 
 
 class ProfileView(APIView):
-    """GET / PATCH /auth/profile {full_name?, email?}"""
+    """
+    GET / PATCH /auth/profile {full_name?, email?, address?, gps_address?}
+
+    The phone number is the sign-in identity, so it's shown but never changed here.
+    GET also returns `verification`: the Ghana Card status and the ID documents the
+    customer has added (POST /kyc/documents).
+    """
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        from apps.kyc.models import KycProfile
-        locked = KycProfile.objects.filter(user=request.user, ghana_card_hash__isnull=False).exists()
-        return Response({**_me(request.user), "email": request.user.email, "name_locked": locked})
+        from apps.kyc.documents import summary
+        user = request.user
+        verification = summary(user)
+        return Response({**_me(user), "email": user.email, "address": user.address,
+                         "gps_address": user.gps_address, "phone_locked": True,
+                         "name_locked": verification["ghana_card_verified"], "verification": verification})
 
     def patch(self, request):
         form = ProfileSerializer(data=request.data, partial=True)

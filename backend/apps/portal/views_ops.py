@@ -173,7 +173,57 @@ def kyc_overview(request):
     tiers = dict(KycProfile.objects.values_list("tier").annotate(n=Count("id")))
     held = KycProfile.objects.filter(frozen=True).select_related("user", "frozen_by").order_by("-frozen_at")[:200]
     tier_rows = [(label, tiers.get(value, 0)) for value, label in KycProfile.Tier.choices]
-    return render(request, "portal/admin/ops_kyc.html", {"tier_rows": tier_rows, "held": held})
+    from apps.kyc.models import IdentityDocument
+    to_review = (IdentityDocument.objects.filter(status=IdentityDocument.Status.PENDING)
+                 .select_related("user").order_by("created_at")[:200])
+    return render(request, "portal/admin/ops_kyc.html",
+                  {"tier_rows": tier_rows, "held": held, "to_review": to_review})
+
+
+@staff_role_required("compliance")
+def kyc_document(request, pk):
+    """Compare a passport / driver's licence photo with its details, then accept or reject."""
+    from apps.kyc import documents
+    from apps.kyc.exceptions import KycError
+    from apps.kyc.models import IdentityDocument
+    doc = get_object_or_404(IdentityDocument.objects.select_related("user", "reviewed_by"), pk=pk)
+    if request.method == "POST":
+        try:
+            documents.review(doc, actor=request.user, approve=request.POST.get("action") == "approve",
+                             note=request.POST.get("note", ""))
+            messages.success(request, f"{doc.get_doc_type_display()} {doc.get_status_display().lower()}.")
+            return redirect("portal:ops_kyc")
+        except KycError as exc:
+            messages.error(request, str(exc))
+        return redirect("portal:ops_kyc_document", pk=doc.pk)
+    from apps.kyc.models import KycProfile
+    profile = KycProfile.objects.filter(user=doc.user).first()
+    others = doc.user.identity_documents.exclude(pk=doc.pk).exclude(status=IdentityDocument.Status.REPLACED)
+    return render(request, "portal/admin/ops_kyc_document.html",
+                  {"doc": doc, "number": doc.number, "profile": profile, "others": others})
+
+
+@staff_role_required("compliance")
+def kyc_document_image(request, pk, side):
+    """The decrypted photo, inline, never cached. Each view is audit-logged."""
+    from django.http import Http404, HttpResponse
+
+    from apps.common import secure_files
+    from apps.kyc.models import IdentityDocument
+    doc = get_object_or_404(IdentityDocument, pk=pk)
+    key = doc.front_key if side == "front" else doc.back_key if side == "back" else ""
+    if not key:
+        raise Http404("No such photo.")
+    try:
+        data, content_type, _ = secure_files.read(key)
+    except FileNotFoundError:
+        raise Http404("This photo's file isn't available.") from None
+    audit("kyc.document_view", actor=request.user, obj=doc, side=side)
+    resp = HttpResponse(data, content_type=content_type)
+    resp["Cache-Control"] = "no-store"
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Disposition"] = "inline"
+    return resp
 
 
 # --- reconciliation (finance) ------------------------------------------------------------------

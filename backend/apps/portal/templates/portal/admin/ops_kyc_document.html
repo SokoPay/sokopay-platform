@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+{% block title %}Review ID document · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:ops_kyc' %}" class="text-sm text-orange">← KYC</a>
+<h1 class="text-xl font-semibold mt-2 mb-1">{{ doc.get_doc_type_display }} for {{ doc.user.full_name|default:doc.user.phone }}</h1>
+<p class="text-sm text-ink/60 mb-6">{% include "portal/_status_pill.html" with status=doc.status %}
+  · added {{ doc.created_at|date:"d M Y, H:i" }}</p>
+
+<div class="grid lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 grid md:grid-cols-2 gap-4">
+    <figure class="bg-surface rounded-lg shadow-sm p-3">
+      <img src="{% url 'portal:ops_kyc_document_image' doc.pk 'front' %}" alt="Front of document" class="w-full rounded">
+      <figcaption class="text-xs text-ink/50 mt-2">Front</figcaption>
+    </figure>
+    {% if doc.back_key %}
+    <figure class="bg-surface rounded-lg shadow-sm p-3">
+      <img src="{% url 'portal:ops_kyc_document_image' doc.pk 'back' %}" alt="Back of document" class="w-full rounded">
+      <figcaption class="text-xs text-ink/50 mt-2">Back</figcaption>
+    </figure>
+    {% endif %}
+  </div>
+
+  <div class="space-y-4">
+    <div class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-1">
+      <h2 class="font-medium mb-2">What the customer entered</h2>
+      <div><span class="text-ink/50">Number:</span> <span class="font-mono">{{ number }}</span></div>
+      <div><span class="text-ink/50">Expires:</span> {{ doc.expiry_date|date:"d M Y"|default:"—" }}</div>
+      <div><span class="text-ink/50">Name on profile:</span> {{ doc.user.full_name|default:"—" }}</div>
+      <div><span class="text-ink/50">Phone:</span> {{ doc.user.phone }}</div>
+      <div><span class="text-ink/50">Address:</span> {{ doc.user.address|default:"—" }} {% if doc.user.gps_address %}({{ doc.user.gps_address }}){% endif %}</div>
+      <div><span class="text-ink/50">Ghana Card:</span>
+        {% if profile and profile.ghana_card_hash %}verified, name “{{ profile.verified_name }}”{% else %}not verified{% endif %}</div>
+      {% if others %}<div class="pt-2 text-ink/50">Other documents:
+        {% for o in others %}{{ o.get_doc_type_display }} ({{ o.get_status_display|lower }}){% if not forloop.last %}, {% endif %}{% endfor %}</div>{% endif %}
+    </div>
+
+    {% if doc.status == 'pending' %}
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-3">{% csrf_token %}
+      <h2 class="font-medium">Decision</h2>
+      <p class="text-xs text-ink/50">Check the photo is clear and unaltered, the number and expiry match, and the name and
+        face match this customer (and their Ghana Card, if verified).</p>
+      <textarea name="note" rows="3" placeholder="Reason (required to reject; the customer sees it)"
+                class="w-full border border-gray-200 rounded-md px-3 py-2"></textarea>
+      <div class="flex gap-2">
+        <button name="action" value="approve" class="bg-success text-white rounded-md px-4 py-2">Accept</button>
+        <button name="action" value="reject" class="bg-danger text-white rounded-md px-4 py-2">Reject</button>
+      </div>
+      <p class="text-xs text-ink/40">Your decision and every photo view are recorded in the audit log.</p>
+    </form>
+    {% else %}
+    <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+      Decided by {{ doc.reviewed_by|default:"NIA check" }} on {{ doc.reviewed_at|date:"d M Y, H:i" }}.
+      {% if doc.review_note %}<br>Note: {{ doc.review_note }}{% endif %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

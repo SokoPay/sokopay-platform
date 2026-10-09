@@ -2,6 +2,7 @@
 KYC API (JWT):
   GET  /kyc           → tier, limits, usage, frozen
   POST /kyc/upgrade   {ghana_card_number}   → tier 0 → 1
+  GET/POST /kyc/documents                   → ID documents (Ghana Card, passport, licence)
 """
 
 from __future__ import annotations
@@ -14,7 +15,7 @@ from rest_framework.views import APIView
 
 from apps.common.money import Money
 
-from . import limits, services
+from . import documents, limits, services
 from .exceptions import KycError
 
 
@@ -85,3 +86,40 @@ class KycSelfieView(APIView):
         except KycError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response(_state(request.user))
+
+
+class _DocumentSerializer(serializers.Serializer):
+    doc_type = serializers.ChoiceField(choices=["ghana_card", "passport", "drivers_licence"])
+    number = serializers.CharField(max_length=40)
+    expiry_date = serializers.DateField(required=False, allow_null=True)
+
+
+class IdentityDocumentsView(APIView):
+    """
+    GET  /kyc/documents   → the Ghana Card status and the documents added so far
+    POST /kyc/documents   multipart: doc_type (ghana_card | passport | drivers_licence),
+                          number, expiry_date (YYYY-MM-DD; passport and licence),
+                          front (photo, required), back (photo, optional)
+    A Ghana Card is checked with NIA at once; a passport or licence waits for review.
+    """
+
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
+
+    def get(self, request):
+        return Response(documents.summary(request.user))
+
+    def post(self, request):
+        form = _DocumentSerializer(data=request.data)
+        if not form.is_valid():
+            field, errs = next(iter(form.errors.items()))
+            label = {"doc_type": "Document type", "number": "Number", "expiry_date": "Expiry date"}.get(field, field)
+            return Response({"error": f"{label}: {errs[0]}"}, status=status.HTTP_400_BAD_REQUEST)
+        data = form.validated_data
+        try:
+            documents.submit(request.user, doc_type=data["doc_type"], number=data["number"],
+                             expiry=data.get("expiry_date"), front=request.FILES.get("front"),
+                             back=request.FILES.get("back"))
+        except KycError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(documents.summary(request.user), status=status.HTTP_201_CREATED)

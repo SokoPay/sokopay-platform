@@ -69,6 +69,10 @@ class User(AbstractBaseUser, PermissionsMixin, TimeStampedModel):
     )
     email = models.EmailField(blank=True)
     full_name = models.CharField(max_length=150, blank=True)
+    # Where the customer lives (KYC / AML "residential address"), and its Ghana Post GPS
+    # digital address, e.g. GA-183-8164.
+    address = models.CharField(max_length=255, blank=True)
+    gps_address = models.CharField(max_length=16, blank=True)
     user_type = models.CharField(max_length=16, choices=UserType.choices, default=UserType.CONSUMER)
 
     is_active = models.BooleanField(default=True)
