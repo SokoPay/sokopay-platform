@@ -17,6 +17,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.stepup import require_pin
+
 from apps.common.money import Money
 from apps.rails.exceptions import WebhookVerificationError
 from apps.rails.types import Network
@@ -35,6 +37,14 @@ from .serializers import (
 def _idempotency_key(request) -> str | None:
     """Clients send an Idempotency-Key header on money-moving POSTs."""
     return request.headers.get("Idempotency-Key")
+
+
+def _wallet_pin(request, data):
+    """Paying from the SokoPay wallet needs the PIN (MoMo-funded payments are approved on
+    the phone with the MoMo PIN instead)."""
+    if data.get("source", "momo") == "wallet":
+        return require_pin(request)
+    return None
 
 
 def _funding(data) -> dict:
@@ -64,6 +74,8 @@ class BillPaymentView(APIView):
     def post(self, request):
         form = BillPaymentRequest(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := _wallet_pin(request, form.validated_data)) is not None:
+            return denied
         biller = get_object_or_404(Biller, code=form.validated_data["biller_code"], is_active=True)
         try:
             payment = services.initiate_bill_payment(
@@ -85,6 +97,8 @@ class AirtimeView(APIView):
     def post(self, request):
         form = AirtimeRequest(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := _wallet_pin(request, form.validated_data)) is not None:
+            return denied
         biller = get_object_or_404(Biller, code=form.validated_data["biller_code"], is_active=True)
         try:
             payment = services.initiate_airtime(
@@ -145,6 +159,8 @@ class DataBundleView(APIView):
     def post(self, request):
         form = DataBundleRequest(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := _wallet_pin(request, form.validated_data)) is not None:
+            return denied
         d = form.validated_data
         try:
             funding = _funding(d)

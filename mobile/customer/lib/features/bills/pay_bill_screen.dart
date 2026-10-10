@@ -45,11 +45,18 @@ class _PayBillScreenState extends State<PayBillScreen> {
     }
   }
 
+  final _attempt = PaymentAttempt('bill');
+
   Future<void> _pay() async {
-    setState(() { _busy = true; _error = null; });
     final payer = context.read<AuthController>().me?['phone'] as String?;
     final wallet = PaySourcePicker.isWallet(_source);
-    final key = 'bill-${DateTime.now().microsecondsSinceEpoch}';
+    String? pin;
+    if (wallet) {
+      pin = await askPinFor(context, action: 'pay GH₵ ${_amount.text.trim()} to ${widget.biller.name}');
+      if (pin == null || !mounted) return;
+    }
+    setState(() { _busy = true; _error = null; });
+    final key = _attempt.key;
     try {
       final res = _isAirtime
           ? await widget.service.buyAirtime(
@@ -60,6 +67,7 @@ class _PayBillScreenState extends State<PayBillScreen> {
               network: wallet ? null : _source,
               payer: wallet ? null : payer,
               idempotencyKey: key,
+              pin: pin,
             )
           : await widget.service.payBill(
               billerCode: widget.biller.code,
@@ -69,9 +77,12 @@ class _PayBillScreenState extends State<PayBillScreen> {
               network: wallet ? null : _source,
               payer: wallet ? null : payer,
               idempotencyKey: key,
+              pin: pin,
             );
+      _attempt.settle();
       setState(() => _result = res);
     } catch (e) {
+      _attempt.settle(e);
       setState(() => _error = apiErrorMessage(e, fallback: 'Payment failed.'));
     } finally {
       if (mounted) setState(() => _busy = false);

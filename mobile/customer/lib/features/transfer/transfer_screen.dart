@@ -66,13 +66,18 @@ class _TransferScreenState extends State<TransferScreen> {
     }
   }
 
+  final _attempt = PaymentAttempt('xfer');
+
   Future<void> _send() async {
+    final pin = await askPinFor(context, action: 'send GH₵ ${_amount.text.trim()} to ${_check?.name ?? 'this account'}');
+    if (pin == null || !mounted) return;
     setState(() { _busy = true; _error = null; });
     try {
-      final t = await _service.send(_target, _amount.text.trim(), _narrative.text.trim(),
-          'xfer-${DateTime.now().microsecondsSinceEpoch}');
+      final t = await _service.send(_target, _amount.text.trim(), _narrative.text.trim(), _attempt.key, pin: pin);
+      _attempt.settle();
       setState(() => _done = t);
     } catch (e) {
+      _attempt.settle(e);
       setState(() => _error = apiErrorMessage(e, fallback: 'Transfer failed.'));
     } finally {
       if (mounted) setState(() => _busy = false);

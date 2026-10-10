@@ -14,9 +14,9 @@ class TransferService {
   }
 
   Future<TransferRecord> send(TransferTarget t, String amount, String narrative,
-      String idempotencyKey) async {
+      String idempotencyKey, {required String pin}) async {
     final r = await _api.post('/wallet/transfer',
-        data: {...t.toJson(), 'amount': amount, 'narrative': narrative},
+        data: {...t.toJson(), 'amount': amount, 'narrative': narrative, 'pin': pin},
         headers: {'Idempotency-Key': idempotencyKey});
     return TransferRecord.fromJson(r.data);
   }

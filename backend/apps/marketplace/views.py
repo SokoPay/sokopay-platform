@@ -17,6 +17,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.stepup import require_pin
+
 from apps.common.money import Money
 
 from . import services
@@ -89,6 +91,8 @@ class PayPremiumView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, reference):
+        if (denied := require_pin(request)) is not None:
+            return denied
         application = get_object_or_404(ProductApplication, reference=reference,
                                         user=request.user)
         form = _PremiumSerializer(data=request.data)

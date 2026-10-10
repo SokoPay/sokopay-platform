@@ -23,6 +23,7 @@ class DataService {
     String? network,
     String? payer,
     required String idempotencyKey,
+    String? pin,
   }) async {
     final r = await _api.post('/payments/data',
         data: {
@@ -32,6 +33,7 @@ class DataService {
           'source': source,
           if (network != null) 'network': network,
           if (payer != null) 'payer': payer,
+          if (pin != null) 'pin': pin,
         },
         headers: {'Idempotency-Key': idempotencyKey});
     return PaymentResult.fromJson(r.data);

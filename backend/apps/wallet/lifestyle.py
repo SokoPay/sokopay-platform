@@ -74,6 +74,7 @@ def catalogue(category: str) -> dict:
          "price_display": ghs(o.price_minor)} for o in c.list_offerings()]}
 
 
+@kyc_limits.debits_serialized("user")
 def order(*, user, category: str, offering_code: str, quantity: int, pin: str) -> LifestyleOrder:
     from apps.accounts import services as auth_services
     try:

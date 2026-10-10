@@ -16,6 +16,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.stepup import require_pin
+
 from apps.common.money import Money
 from apps.connectors.types import DestinationType, TransferDestination
 from apps.merchants import qr
@@ -106,6 +108,7 @@ class WalletSendLookupView(APIView):
     SokoPay user, and roughly who?"""
 
     permission_classes = [IsAuthenticated]
+    throttle_scope = "lookup"     # who-is-this lookups: limited per user (number harvesting)
 
     def get(self, request):
         ident = (request.query_params.get("account") or request.query_params.get("phone") or "").strip()
@@ -124,6 +127,8 @@ class WalletSendView(APIView):
     def post(self, request):
         form = SendSerializer(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := require_pin(request)) is not None:
+            return denied
         ident = form.validated_data.get("recipient") or form.validated_data.get("recipient_phone") or ""
         try:
             recipient_phone = resolve_account(ident).phone
@@ -134,6 +139,7 @@ class WalletSendView(APIView):
                 sender=request.user,
                 recipient_phone=recipient_phone,
                 amount_minor=Money.from_major(form.validated_data["amount"], "GHS").minor,
+                idempotency_key=request.headers.get("Idempotency-Key"),
             )
         except WalletError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -149,6 +155,7 @@ class PayResolveView(APIView):
     """GET /pay/resolve?code=… — what a scanned/typed code means, before paying."""
 
     permission_classes = [IsAuthenticated]
+    throttle_scope = "lookup"     # who-is-this lookups: limited per user (number harvesting)
 
     def get(self, request):
         try:
@@ -173,6 +180,8 @@ class PayMerchantView(APIView):
     def post(self, request):
         form = _PayMerchantSerializer(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := require_pin(request)) is not None:
+            return denied
         amount = form.validated_data.get("amount")
         try:
             payment = merchant_pay.pay(
@@ -229,6 +238,7 @@ class TransferLookupView(APIView):
     """POST /wallet/transfer/lookup — confirm the recipient's name before sending."""
 
     permission_classes = [IsAuthenticated]
+    throttle_scope = "lookup"     # who-is-this lookups: limited per user (number harvesting)
 
     def post(self, request):
         form = DestinationSerializer(data=request.data)
@@ -253,6 +263,8 @@ class ExternalTransferView(APIView):
     def post(self, request):
         form = ExternalTransferSerializer(data=request.data)
         form.is_valid(raise_exception=True)
+        if (denied := require_pin(request)) is not None:
+            return denied
         d = form.validated_data
         try:
             transfer = interop.send_external(

@@ -270,11 +270,15 @@ REST_FRAMEWORK = {
         "rest_framework.authentication.SessionAuthentication",
     ),
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Secure by default: every endpoint needs a signed-in user unless it says otherwise
+    # (public ones declare AllowAny and protect themselves: OTP limits, signatures, secrets).
+    "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
+        "rest_framework.throttling.ScopedRateThrottle",
     ],
-    "DEFAULT_THROTTLE_RATES": {"anon": "30/min", "user": "120/min"},
+    "DEFAULT_THROTTLE_RATES": {"anon": "30/min", "user": "120/min", "lookup": "60/hour"},
 }
 
 SPECTACULAR_SETTINGS = {

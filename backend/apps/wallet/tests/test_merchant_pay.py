@@ -130,7 +130,9 @@ def test_api_resolve_and_pay(shop, customer):
     assert r.status_code == 200 and r.json()["merchant_name"] == "Ama Stores"
     assert client.get("/api/v1/pay/resolve", {"code": "NOPE1234"}).status_code == 404
 
+    customer.set_pin("482915")
+    customer.save()
     r = client.post("/api/v1/wallet/pay-merchant",
-                    {"code": shop.short_code, "amount": "25.00"}, format="json")
+                    {"code": shop.short_code, "amount": "25.00", "pin": "482915"}, format="json")
     assert r.status_code == 201, r.content
     assert r.json()["merchant"] == "Ama Stores" and r.json()["status"] == "succeeded"

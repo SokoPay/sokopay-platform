@@ -124,11 +124,18 @@ class _DataBuyScreenState extends State<DataBuyScreen> {
     _phone.text = context.read<AuthController>().me?['phone'] as String? ?? '+233';
   }
 
+  final _attempt = PaymentAttempt('data');
+
   Future<void> _buy() async {
-    setState(() { _busy = true; _error = null; });
     final api = context.read<ApiClient>();
     final payer = context.read<AuthController>().me?['phone'] as String?;
     final wallet = PaySourcePicker.isWallet(_source);
+    String? pin;
+    if (wallet) {
+      pin = await askPinFor(context, action: 'buy ${widget.bundle.name}');
+      if (pin == null || !mounted) return;
+    }
+    setState(() { _busy = true; _error = null; });
     try {
       final res = await DataService(api).buy(
         telco: widget.telco,
@@ -137,10 +144,13 @@ class _DataBuyScreenState extends State<DataBuyScreen> {
         source: wallet ? 'wallet' : 'momo',
         network: wallet ? null : _source,
         payer: wallet ? null : payer,
-        idempotencyKey: 'data-${DateTime.now().microsecondsSinceEpoch}',
+        idempotencyKey: _attempt.key,
+        pin: pin,
       );
+      _attempt.settle();
       setState(() => _result = res);
     } catch (e) {
+      _attempt.settle(e);
       setState(() => _error = apiErrorMessage(e, fallback: 'Could not buy this bundle.'));
     } finally {
       if (mounted) setState(() => _busy = false);

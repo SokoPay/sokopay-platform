@@ -223,6 +223,7 @@ def _initiate(*, purpose, user, biller, account_ref, amount_minor, network, paye
     return payment
 
 
+@kyc_limits.debits_serialized("user")
 def _pay_from_wallet(*, purpose, user, biller, account_ref, amount_minor, fee, total,
                      currency, mode, idempotency_key, product_code) -> Payment:
     """

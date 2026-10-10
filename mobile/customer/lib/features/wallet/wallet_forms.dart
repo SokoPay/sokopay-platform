@@ -107,13 +107,20 @@ class _WalletSendScreenState extends State<WalletSendScreen> {
     }
   }
 
+  final _attempt = PaymentAttempt('p2p');
+
   Future<void> _submit() async {
+    final api = context.read<ApiClient>();
+    final pin = await askPinFor(context, action: 'send GH₵ ${_amount.text.trim()} to ${_name ?? _phone.text.trim()}');
+    if (pin == null || !mounted) return;
     setState(() { _busy = true; _error = null; });
     try {
-      final r = await WalletService(context.read<ApiClient>())
-          .send(_phone.text.trim(), _amount.text.trim());
+      final r = await WalletService(api)
+          .send(_phone.text.trim(), _amount.text.trim(), pin: pin, idempotencyKey: _attempt.key);
+      _attempt.settle();
       setState(() => _success = 'Sent ${r['amount']} to ${r['recipient']}');
     } on DioException catch (e) {
+      _attempt.settle(e);
       setState(() => _error = _msg(e));
     } finally {
       if (mounted) setState(() => _busy = false);

@@ -77,16 +77,22 @@ def test_embedded_products_need_demi(settings, ama):
 
 def test_pay_premium_api(ama):
     app = _approved(ama, "INS-HEALTH-BASIC")
+    ama.set_pin("482915")
+    ama.save()
     client = APIClient()
     client.force_authenticate(user=ama)
+    assert client.post(f"/api/v1/marketplace/applications/{app.reference}/pay-premium",
+                       {"amount": "25.00"}, format="json").status_code == 400      # PIN required
     apps_list = client.get("/api/v1/marketplace/applications").json()
     assert apps_list[0]["category"] == "insurance"
     r = client.post(f"/api/v1/marketplace/applications/{app.reference}/pay-premium",
-                    {"amount": "25.00"}, format="json")
+                    {"amount": "25.00", "pin": "482915"}, format="json")
     assert r.status_code == 201, r.content
     # Someone else can't pay against Ama's application.
     other = User.objects.create_user(phone="+233200000077")
+    other.set_pin("604213")
+    other.save()
     client.force_authenticate(user=other)
     r = client.post(f"/api/v1/marketplace/applications/{app.reference}/pay-premium",
-                    {"amount": "25.00"}, format="json")
+                    {"amount": "25.00", "pin": "604213"}, format="json")
     assert r.status_code == 404

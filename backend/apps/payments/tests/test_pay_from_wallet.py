@@ -108,10 +108,16 @@ def test_momo_source_still_requires_network_and_payer(ama, ecg):
 
 
 def test_api_wallet_source(ama, ecg):
+    ama.set_pin("482915")
+    ama.save()
     client = APIClient()
     client.force_authenticate(user=ama)
-    r = client.post("/api/v1/payments/bill", {
+    no_pin = client.post("/api/v1/payments/bill", {
         "biller_code": "ECG_PREPAID", "account": "P1", "amount": "20.00", "source": "wallet",
+    }, format="json")
+    assert no_pin.status_code == 400 and no_pin.json()["pin_required"]
+    r = client.post("/api/v1/payments/bill", {
+        "biller_code": "ECG_PREPAID", "account": "P1", "amount": "20.00", "source": "wallet", "pin": "482915",
     }, format="json")
     assert r.status_code == 201, r.content
     assert r.json()["status"] == "succeeded" and r.json()["funding_source"] == "wallet"

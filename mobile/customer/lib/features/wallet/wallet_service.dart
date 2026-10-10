@@ -23,8 +23,13 @@ class WalletService {
     return r.data['found'] == true ? r.data['name'] as String? : null;
   }
 
-  Future<Map<String, dynamic>> send(String recipient, String amount) async {
-    final r = await _api.post('/wallet/send', data: {'recipient': recipient, 'amount': amount});
+  /// Send to a SokoPay user. [pin] is checked by the server; [idempotencyKey] makes a
+  /// retried request move the money only once.
+  Future<Map<String, dynamic>> send(String recipient, String amount,
+      {required String pin, required String idempotencyKey}) async {
+    final r = await _api.post('/wallet/send',
+        data: {'recipient': recipient, 'amount': amount, 'pin': pin},
+        headers: {'Idempotency-Key': idempotencyKey});
     return Map<String, dynamic>.from(r.data);
   }
 }

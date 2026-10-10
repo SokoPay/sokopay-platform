@@ -17,6 +17,10 @@ outflow — deliberately conservative.
 
 from __future__ import annotations
 
+import contextlib
+import functools
+import hashlib
+
 import datetime as dt
 
 from django.conf import settings
@@ -114,3 +118,43 @@ def check_debit(user, amount_minor: int) -> None:
 
 def format_limit(minor) -> str:
     return "Unlimited" if minor is None else _ghs(minor)
+
+
+
+# --- one debit at a time per customer ------------------------------------------------------
+@contextlib.contextmanager
+def serialized_debits(user):
+    """
+    Run one customer's debits one after another. Balance and limit checks (daily/monthly
+    caps, the 24 h cap after a PIN reset) happen before the ledger posting; without this,
+    several simultaneous requests could each pass the checks and together exceed a limit.
+
+    PostgreSQL session advisory lock keyed on the customer: held from before the checks to
+    after the posting, released even on error, independent of the ledger's row locks (so it
+    can't deadlock with them). Other customers are never blocked. SQLite (dev) has no
+    concurrent writers, so there it's a no-op.
+    """
+    from django.db import connection
+    if user is None or connection.vendor != "postgresql":
+        yield
+        return
+    digest = hashlib.blake2b(f"sokopay-debit:{user.pk}".encode(), digest_size=8).digest()
+    key = int.from_bytes(digest, "big", signed=True)
+    with connection.cursor() as cur:
+        cur.execute("SELECT pg_advisory_lock(%s)", [key])
+    try:
+        yield
+    finally:
+        with connection.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s)", [key])
+
+
+def debits_serialized(user_kwarg: str):
+    """Decorator for a service function that takes money out of `user_kwarg`'s wallet."""
+    def decorator(fn):
+        @functools.wraps(fn)
+        def wrapper(*args, **kwargs):
+            with serialized_debits(kwargs.get(user_kwarg)):
+                return fn(*args, **kwargs)
+        return wrapper
+    return decorator

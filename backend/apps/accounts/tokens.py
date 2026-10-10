@@ -87,13 +87,15 @@ def check_live(payload: dict, user) -> None:
         raise TokenError("Session has ended. Please sign in again.")
 
 
-def revoke(payload: dict, user) -> None:
+def revoke(payload: dict, user) -> bool:
+    """Deny-list this token. Returns False if it was already deny-listed (someone got there first)."""
     from .models import RevokedToken
-    RevokedToken.objects.get_or_create(
+    _, created = RevokedToken.objects.get_or_create(
         jti=payload["jti"],
         defaults={"user": user, "token_type": payload.get("type", ""),
                   "expires_at": dt.datetime.fromtimestamp(int(payload["exp"]), tz=dt.timezone.utc)},
     )
+    return created
 
 
 def revoke_all(user) -> None:
@@ -119,6 +121,11 @@ def access_from_refresh(refresh_token: str) -> dict:
     user = get_user_model().objects.filter(pk=payload["sub"], is_active=True).first()
     if user is None:
         raise TokenError("Invalid token.")
-    check_live(payload, user)
-    revoke(payload, user)                       # rotation: one use per refresh token
+    if stale_generation(payload, user):
+        raise TokenError("Session has ended. Please sign in again.")
+    # Rotation: one use per refresh token. A refresh token that has already been used (or two
+    # requests racing with the same one) means it was copied: end every session for this user.
+    if is_revoked(payload) or not revoke(payload, user):
+        revoke_all(user)
+        raise TokenError("Session has ended. Please sign in again.")
     return issue_tokens(user)

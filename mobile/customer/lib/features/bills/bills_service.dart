@@ -31,6 +31,7 @@ class BillsService {
     String? network,
     String? payer,
     required String idempotencyKey,
+    String? pin,
   }) async {
     final r = await _api.post('/payments/bill',
         data: {
@@ -38,6 +39,7 @@ class BillsService {
           'account': account,
           'amount': amount,
           'source': source,
+          if (pin != null) 'pin': pin,
           if (network != null) 'network': network,
           if (payer != null) 'payer': payer,
         },
@@ -53,6 +55,7 @@ class BillsService {
     String? network,
     String? payer,
     required String idempotencyKey,
+    String? pin,
   }) async {
     final r = await _api.post('/payments/airtime',
         data: {
@@ -60,6 +63,7 @@ class BillsService {
           'phone': phone,
           'amount': amount,
           'source': source,
+          if (pin != null) 'pin': pin,
           if (network != null) 'network': network,
           if (payer != null) 'payer': payer,
         },

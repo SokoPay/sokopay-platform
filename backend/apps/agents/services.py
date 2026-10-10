@@ -239,6 +239,7 @@ def pending_cash_outs(customer):
             .select_related("agent").order_by("-created_at"))
 
 
+@kyc_limits.debits_serialized("customer")
 def approve_cash_out(*, customer, request_id, pin: str) -> CashOutRequest:
     """Step 2 (customer): approve with PIN -> wallet debited, agent float credited."""
     from apps.accounts import services as auth_services

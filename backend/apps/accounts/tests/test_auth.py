@@ -62,10 +62,14 @@ def test_refresh_mints_new_access_and_retires_old_refresh():
     refreshed = services.refresh(issued["refresh"])
     assert "access" in refreshed
     assert tokens.decode(refreshed["access"], "access")["sub"] == str(user.id)
-    # Rotation: the refresh token that was just used is dead (a stolen copy is useless).
+    assert "access" in services.refresh(refreshed["refresh"])      # the chain keeps working…
+    # Rotation: a used refresh token is dead. Presenting it again means it was copied, so every
+    # session for this person ends (refresh-token reuse detection).
     with pytest.raises(services.AuthError):
         services.refresh(issued["refresh"])
-    assert "access" in services.refresh(refreshed["refresh"])
+    user.refresh_from_db()
+    with pytest.raises(services.AuthError):
+        services.refresh(refreshed["refresh"])
 
 
 def test_logout_revokes_access_and_refresh():

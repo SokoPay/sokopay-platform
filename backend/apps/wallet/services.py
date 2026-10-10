@@ -25,7 +25,7 @@ from django.utils import timezone
 from apps.common.money import Money
 from apps.kyc import limits as kyc_limits
 from apps.ledger import accounts
-from apps.ledger.models import Posting
+from apps.ledger.models import JournalEntry, Posting
 from apps.ledger.services import credit, debit, natural_balance_of, post_entry
 from apps.licensing.capabilities import Capability
 from apps.licensing.gate import require_capability
@@ -164,9 +164,19 @@ def lookup_recipient(phone: str) -> dict:
 
 
 @transaction.atomic
-def send_p2p(*, sender, recipient_phone: str, amount_minor: int, currency: str = "GHS") -> dict:
-    """Move e-money from one wallet to another. Sender cannot go negative."""
+@kyc_limits.debits_serialized("sender")
+def send_p2p(*, sender, recipient_phone: str, amount_minor: int, currency: str = "GHS",
+             idempotency_key: str | None = None) -> dict:
+    """
+    Move e-money from one wallet to another. Sender cannot go negative. With an
+    idempotency key, a repeated request (double tap, network retry) moves money once.
+    """
     require_capability(Capability.WALLET_P2P)
+    entry_key = f"p2p:{sender.id}:{idempotency_key}"[:128] if idempotency_key else None
+    if entry_key and JournalEntry.objects.filter(idempotency_key=entry_key).exists():
+        recipient = User.objects.filter(phone=recipient_phone).first()
+        return {"recipient": recipient_phone, "recipient_name": display_name(recipient) if recipient else "",
+                "amount_minor": amount_minor, "new_balance_minor": balance(sender, currency), "repeated": True}
     if amount_minor <= 0:
         raise WalletError("Amount must be positive.")
     if recipient_phone == sender.phone:
@@ -188,6 +198,7 @@ def send_p2p(*, sender, recipient_phone: str, amount_minor: int, currency: str =
         f"Transfer {sender.phone} → {recipient_phone}",
         [debit(sender_acc, amount_minor), credit(recipient_acc, amount_minor)],
         reference=("p2p", str(sender.id)),
+        idempotency_key=entry_key,
     )
     notify(recipient, kind="wallet", title="Money received",
            body=f"{ghs(amount_minor)} from {display_name(sender)} is in your wallet.",

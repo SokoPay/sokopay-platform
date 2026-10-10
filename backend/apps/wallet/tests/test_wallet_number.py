@@ -69,14 +69,18 @@ def test_wallet_endpoint_shows_wallet_id_and_p2p_by_wallet_id(ama):
     body = c.get("/api/v1/wallet").json()
     assert body["wallet_number"].startswith("7") and " " in body["wallet_number_display"]
 
+    kofi.set_pin("482915")
+    kofi.save()
     k = APIClient()
     k.force_authenticate(user=kofi)
     look = k.get("/api/v1/wallet/send/lookup", {"account": body["wallet_number"]}).json()
     assert look == {"found": True, "name": "Ama M."}
-    r = k.post("/api/v1/wallet/send", {"recipient": body["wallet_number"], "amount": "15.00"}, format="json")
+    r = k.post("/api/v1/wallet/send", {"recipient": body["wallet_number"], "amount": "15.00", "pin": "482915"},
+               format="json")
     assert r.status_code == 200, r.content
     assert wallet.balance(ama) == 15_00
-    bad = k.post("/api/v1/wallet/send", {"recipient": "7000000000", "amount": "1.00"}, format="json")
+    bad = k.post("/api/v1/wallet/send", {"recipient": "7000000000", "amount": "1.00", "pin": "482915"},
+                 format="json")
     assert bad.status_code == 400
 
 

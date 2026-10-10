@@ -271,15 +271,38 @@ def logout_everywhere(user) -> None:
     tokens.revoke_all(user)
 
 
-def login_with_pin(phone: str, pin: str) -> dict:
-    """Return JWT tokens for a phone+PIN login, enforcing lockout."""
-    try:
-        user = User.objects.get(phone=phone, is_active=True)
-    except User.DoesNotExist as exc:
-        raise AuthError("No account for that phone.") from exc
+LOGIN_FAILED = "Wrong phone number or PIN."
 
-    _check_pin_with_lockout(user, pin)
+
+def login_with_pin(phone: str, pin: str) -> dict:
+    """
+    Return JWT tokens for a phone+PIN login, enforcing lockout. A wrong PIN and an unknown
+    number get the same answer in about the same time, so the login screen can't be used
+    to find out who has a SokoPay account.
+    """
+    user = User.objects.filter(phone=phone, is_active=True).first()
+    if user is None:
+        from django.contrib.auth.hashers import check_password
+        check_password(pin or "", _DUMMY_PIN_HASH())          # spend the same hashing time
+        raise AuthError(LOGIN_FAILED)
+    try:
+        _check_pin_with_lockout(user, pin)
+    except AuthError as exc:
+        if str(exc) == "Wrong PIN.":
+            raise AuthError(LOGIN_FAILED) from exc
+        raise
     return tokens.issue_tokens(user)
+
+
+def _DUMMY_PIN_HASH() -> str:  # noqa: N802 - computed once, then cached
+    global _dummy_hash
+    if _dummy_hash is None:
+        from django.contrib.auth.hashers import make_password
+        _dummy_hash = make_password("not-a-real-pin")
+    return _dummy_hash
+
+
+_dummy_hash = None
 
 
 def confirm_pin(user, pin: str) -> None:

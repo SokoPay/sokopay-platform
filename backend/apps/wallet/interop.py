@@ -87,6 +87,7 @@ def name_enquiry(destination: TransferDestination) -> AccountLookup:
         return unavailable
 
 
+@kyc_limits.debits_serialized("sender")
 def send_external(*, sender, destination: TransferDestination, amount_minor: int,
                   narrative: str = "", idempotency_key: str | None = None,
                   currency: str = "GHS") -> ExternalTransfer:

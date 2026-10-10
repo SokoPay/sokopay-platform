@@ -138,6 +138,7 @@ def _new_reference() -> str:
     return "XB-" + "".join(secrets.choice(_REF) for _ in range(10))
 
 
+@kyc_limits.debits_serialized("user")
 def send(*, user, quote_id: str, purpose: str, pin: str) -> CrossBorderTransfer:
     from apps.accounts import services as auth_services
     try:

@@ -106,6 +106,7 @@ def _require_approved(application: ProductApplication, category: str) -> None:
 
 
 @transaction.atomic
+@kyc_limits.debits_serialized("user")
 def pay_premium(*, user, application: ProductApplication, amount_minor: int) -> ProductTransaction:
     """Pay an insurance premium from the customer's wallet to the insurer."""
     require_capability(Capability.EMBEDDED_FINANCIAL_PRODUCTS)
@@ -187,6 +188,7 @@ def _check_pin(user, pin: str) -> None:
         raise MarketplaceError(str(exc)) from exc
 
 
+@kyc_limits.debits_serialized("user")
 def contribute(*, user, application: ProductApplication, amount_minor: int, pin: str) -> ProductTransaction:
     """Pay into a savings / investment / pension account from the wallet.
         Dr customer_wallet   Cr financial_partner_payable:<partner>   (swept to the partner by ops)"""

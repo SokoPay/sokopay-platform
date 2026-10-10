@@ -25,6 +25,10 @@ if _SMS == "arkesel" and not env("ARKESEL_API_KEY", default=""):
     raise ImproperlyConfigured("SMS_PROVIDER=arkesel needs ARKESEL_API_KEY.")
 PORTAL_2FA_SMS = env.bool("PORTAL_2FA_SMS", default=True)
 
+# The JSON API accepts app tokens only; portal session cookies never authenticate it.
+REST_FRAMEWORK = {**REST_FRAMEWORK,  # noqa: F405
+                  "DEFAULT_AUTHENTICATION_CLASSES": ("apps.accounts.authentication.JWTAuthentication",)}
+
 # Required: an explicit host allow-list (no wildcards).
 ALLOWED_HOSTS = env("ALLOWED_HOSTS")
 

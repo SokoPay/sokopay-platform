@@ -37,6 +37,7 @@ class MerchantPayError(WalletError):
     pass
 
 
+@kyc_limits.debits_serialized("user")
 def pay(*, user, code: str, amount_minor: int | None = None,
         idempotency_key: str | None = None, currency: str = "GHS") -> Payment:
     """

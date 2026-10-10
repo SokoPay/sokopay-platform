@@ -28,17 +28,26 @@ class _PayMerchantScreenState extends State<PayMerchantScreen> {
     if (_fixed) _amount.text = widget.target['amount'].toString();
   }
 
+  final _attempt = PaymentAttempt('qr');
+
   Future<void> _pay() async {
+    final api = context.read<ApiClient>();
+    final pin = await askPinFor(context,
+        action: 'pay GH₵ ${_amount.text.trim()} to ${widget.target['merchant_name'] ?? 'this merchant'}');
+    if (pin == null || !mounted) return;
     setState(() { _busy = true; _error = null; });
     try {
-      final r = await context.read<ApiClient>().post('/wallet/pay-merchant',
+      final r = await api.post('/wallet/pay-merchant',
           data: {
             'code': widget.target['request_token'] ?? widget.target['merchant_code'] ?? widget.code,
             if (!_fixed) 'amount': _amount.text.trim(),
+            'pin': pin,
           },
-          headers: {'Idempotency-Key': 'qr-${DateTime.now().microsecondsSinceEpoch}'});
+          headers: {'Idempotency-Key': _attempt.key});
+      _attempt.settle();
       setState(() => _done = Map<String, dynamic>.from(r.data));
     } catch (e) {
+      _attempt.settle(e);
       setState(() => _error = apiErrorMessage(e, fallback: 'Payment failed.'));
     } finally {
       if (mounted) setState(() => _busy = false);

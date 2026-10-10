@@ -7,6 +7,7 @@ but real protection comes from staff 2FA and IP allow-listing, not obscurity.
 
 from django.contrib import admin
 from django.http import JsonResponse
+from django.conf import settings
 from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
@@ -26,8 +27,6 @@ urlpatterns = [
     path("legal/<str:name>", legal.page, name="legal-page"),
     path("sp-admin/", admin.site.urls),
     # API documentation (schema public-safe; access-controlled in production).
-    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
     # Feature app routes.
     path("api/v1/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.payments.urls")),
@@ -49,3 +48,10 @@ from apps.common import devtools  # noqa: E402
 
 if devtools.enabled():
     urlpatterns.append(path("dev/mock-partner/", devtools.mock_partner, name="dev-mock-partner"))
+
+# The API description is for developers: served only when DEBUG is on, never on servers.
+if settings.DEBUG:
+    urlpatterns += [
+        path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+        path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+    ]
