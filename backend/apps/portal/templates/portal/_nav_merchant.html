@@ -1,0 +1,20 @@
+{% load nav_tags %}
+<div class="sp-group">Business</div>
+{% nav_link "portal:dashboard" "Home" exact=True %}
+{% nav_link "portal:payments" "Payments" %}
+{% nav_link "portal:disputes" "Disputes" %}
+{% nav_link "portal:statements" "Statements" %}
+
+<div class="sp-group">Get paid</div>
+{% nav_link "portal:qr" "QR codes" %}
+{% nav_link "portal:payment_links" "Payment links" %}
+
+<div class="sp-group">Pay out</div>
+{% nav_link "portal:settlements" "Settlements" %}
+{% nav_link "portal:bulk" "Bulk payments" %}
+
+<div class="sp-group">Settings</div>
+{% nav_link "portal:team" "Team" %}
+{% nav_link "portal:api_keys" "Developers (API keys)" %}
+{% nav_link "portal:webhooks" "Webhooks" %}
+{% nav_link "portal:security" "My security" %}

@@ -1,0 +1,29 @@
+{% load nav_tags %}
+{# Back-office menu. Each item appears only for the staff roles allowed to open it (superusers: all). #}
+<div class="sp-group">Monitor</div>
+{% nav_link "portal:admin_dashboard" "Overview" exact=True %}
+{% if staff_roles %}{% nav_link "portal:admin_transactions" "Transactions" %}{% endif %}
+{% if 'compliance' in staff_roles or 'finance' in staff_roles or 'operations' in staff_roles %}{% nav_link "portal:admin_insights" "Insights" %}{% endif %}
+{% if staff_roles %}{% nav_link "portal:ops_health" "System health" %}{% endif %}
+
+<div class="sp-group">People &amp; businesses</div>
+{% if 'support' in staff_roles or 'operations' in staff_roles or 'compliance' in staff_roles %}{% nav_link "portal:admin_users" "Users" %}{% endif %}
+{% nav_link "portal:merchant_queue" "Merchants" %}
+{% if 'operations' in staff_roles %}{% nav_link "portal:ops_agents" "Agents" %}{% endif %}
+{% if 'support' in staff_roles or 'compliance' in staff_roles or 'operations' in staff_roles %}{% nav_link "portal:ops_support" "Support lookup" %}{% endif %}
+
+<div class="sp-group">Money</div>
+{% if 'finance' in staff_roles or 'operations' in staff_roles %}{% nav_link "portal:admin_payments" "Payments & settlement" %}{% endif %}
+{% nav_link "portal:settlement_queue" "Settlement approvals" %}
+{% if 'operations' in staff_roles %}{% nav_link "portal:ops_float" "Float approvals" %}{% nav_link "portal:ops_cashouts" "Cash-out monitor" %}{% endif %}
+{% if 'finance' in staff_roles %}{% nav_link "portal:ops_recon" "Reconciliation" %}{% nav_link "portal:ops_pricing" "Prices" %}{% endif %}
+{% nav_link "portal:safeguarding" "Safeguarding" %}
+
+<div class="sp-group">Compliance &amp; risk</div>
+{% if 'compliance' in staff_roles %}{% nav_link "portal:admin_risk" "Risk overview" %}{% nav_link "portal:compliance" "AML cases" %}{% nav_link "portal:ops_kyc" "KYC & holds" %}{% endif %}
+{% if 'operations' in staff_roles %}{% nav_link "portal:ops_disputes" "Disputes" %}{% endif %}
+{% if 'finance' in staff_roles or 'compliance' in staff_roles %}{% nav_link "portal:ops_regulatory" "Regulatory returns" %}{% nav_link "portal:ops_audit" "Audit log" %}{% endif %}
+
+<div class="sp-group">Platform</div>
+{% nav_link "portal:integrations" "Integrations" %}
+{% nav_link "portal:security" "My security" %}

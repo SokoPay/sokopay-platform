@@ -18,67 +18,102 @@
   </script>
   <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.8/dist/cdn.min.js" defer></script>
+  <style>
+    /* Left menu. Desktop: beside the page, hidden/shown with the menu button (remembered).
+       Phones and tablets: slides in over the page, closes when a page is chosen. */
+    .sp-sidebar { width: 15rem; flex-shrink: 0; }
+    .sp-group { margin: 1rem 0 .25rem; padding: 0 .75rem; font-size: .7rem; letter-spacing: .06em;
+                text-transform: uppercase; color: rgba(255,255,255,.4); }
+    @media (min-width: 1024px) {
+      .sp-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+      html[data-sidebar="closed"] .sp-sidebar { display: none; }
+      .sp-backdrop, .sp-close { display: none !important; }
+    }
+    @media (max-width: 1023.98px) {
+      .sp-sidebar { position: fixed; top: 0; bottom: 0; left: 0; z-index: 40; overflow-y: auto;
+                    transform: translateX(-100%); transition: transform .2s ease; }
+      html[data-drawer="open"] .sp-sidebar { transform: none; box-shadow: 0 0 40px rgba(0,0,0,.35); }
+      .sp-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 30; }
+      html[data-drawer="open"] .sp-backdrop { display: block; }
+    }
+    @media (prefers-reduced-motion: reduce) { .sp-sidebar { transition: none; } }
+  </style>
+  <script>
+    // Menu state lives on <html>, which hx-boost never replaces, so it survives page changes.
+    (function () {
+      var KEY = "sp_sidebar", root = document.documentElement;
+      try { if (localStorage.getItem(KEY) === "closed") root.dataset.sidebar = "closed"; } catch (e) {}
+      function desktop() { return window.matchMedia("(min-width: 1024px)").matches; }
+      function isOpen() { return desktop() ? root.dataset.sidebar !== "closed" : root.dataset.drawer === "open"; }
+      function sync() {
+        document.querySelectorAll("[data-toggle-sidebar]").forEach(function (b) {
+          b.setAttribute("aria-expanded", isOpen() ? "true" : "false");
+          if (b.dataset.label !== "off") b.setAttribute("aria-label", isOpen() ? "Hide menu" : "Show menu");
+        });
+      }
+      function closeDrawer() { delete root.dataset.drawer; sync(); }
+      document.addEventListener("click", function (ev) {
+        var t = ev.target.closest("[data-toggle-sidebar]");
+        if (t) {
+          ev.preventDefault();
+          if (desktop()) {
+            var hide = root.dataset.sidebar !== "closed";
+            if (hide) root.dataset.sidebar = "closed"; else delete root.dataset.sidebar;
+            try { localStorage.setItem(KEY, hide ? "closed" : "open"); } catch (e) {}
+          } else if (root.dataset.drawer === "open") { delete root.dataset.drawer; }
+          else { root.dataset.drawer = "open"; }
+          sync();
+          return;
+        }
+        if (ev.target.closest(".sp-sidebar a")) closeDrawer();
+      });
+      document.addEventListener("keydown", function (ev) { if (ev.key === "Escape") closeDrawer(); });
+      window.addEventListener("resize", function () { if (desktop()) closeDrawer(); else sync(); });
+      document.addEventListener("DOMContentLoaded", sync);
+      document.addEventListener("htmx:afterSettle", sync);
+    })();
+  </script>
 </head>
 <body hx-boost="true" class="bg-bg text-ink min-h-screen">
   {% if environment_banner %}<div style="background:#B26A00;color:#fff;text-align:center;font:600 12px/1.6 system-ui,sans-serif;padding:3px 8px">{{ environment_banner }}</div>{% endif %}
 
-{% if user.is_authenticated %}
+{% if show_nav %}
   {% with staff=user.user_type|default:"" %}
-  <header class="bg-ink text-white">
-    <div class="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-      <a href="{% if staff == 'staff' %}{% url 'portal:admin_dashboard' %}{% else %}{% url 'portal:dashboard' %}{% endif %}"
-         class="font-bold tracking-wide">SOKO<span class="text-orange">PAY</span></a>
-      <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        {% if staff == 'staff' %}
-          <a href="{% url 'portal:admin_dashboard' %}" class="hover:text-orange">Overview</a>
-          {% if 'support' in staff_roles or 'operations' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:admin_users' %}" class="hover:text-orange">Users</a>{% endif %}
-          {% if staff_roles %}<a href="{% url 'portal:admin_transactions' %}" class="hover:text-orange">Transactions</a>{% endif %}
-          {% if 'finance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:admin_payments' %}" class="hover:text-orange">Payments</a>{% endif %}
-          {% if 'compliance' in staff_roles %}<a href="{% url 'portal:admin_risk' %}" class="hover:text-orange">Risk</a>{% endif %}
-          {% if 'compliance' in staff_roles or 'finance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:admin_insights' %}" class="hover:text-orange">Insights</a>{% endif %}
-          <a href="{% url 'portal:merchant_queue' %}" class="hover:text-orange">Merchants</a>
-          {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_agents' %}" class="hover:text-orange">Agents</a>{% endif %}
-          <details class="relative">
-            <summary class="cursor-pointer list-none hover:text-orange">More ▾</summary>
-            <div class="absolute right-0 z-20 mt-2 w-52 bg-surface text-ink rounded-md shadow-lg py-1 text-sm">
-              <a href="{% url 'portal:settlement_queue' %}" class="block px-4 py-1.5 hover:bg-bg">Approvals</a>
-              <a href="{% url 'portal:safeguarding' %}" class="block px-4 py-1.5 hover:bg-bg">Safeguarding</a>
-              {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_disputes' %}" class="block px-4 py-1.5 hover:bg-bg">Disputes</a>
-              <a href="{% url 'portal:ops_float' %}" class="block px-4 py-1.5 hover:bg-bg">Float approvals</a>{% endif %}
-              {% if 'compliance' in staff_roles %}<a href="{% url 'portal:compliance' %}" class="block px-4 py-1.5 hover:bg-bg">AML cases</a>
-              <a href="{% url 'portal:ops_kyc' %}" class="block px-4 py-1.5 hover:bg-bg">KYC &amp; holds</a>{% endif %}
-              {% if 'finance' in staff_roles %}<a href="{% url 'portal:ops_recon' %}" class="block px-4 py-1.5 hover:bg-bg">Reconciliation</a>
-              <a href="{% url 'portal:ops_pricing' %}" class="block px-4 py-1.5 hover:bg-bg">Prices</a>{% endif %}
-              {% if 'finance' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:ops_regulatory' %}" class="block px-4 py-1.5 hover:bg-bg">Regulatory returns</a>{% endif %}
-              {% if 'support' in staff_roles or 'compliance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:ops_support' %}" class="block px-4 py-1.5 hover:bg-bg">Support lookup</a>{% endif %}
-              <a href="{% url 'portal:integrations' %}" class="block px-4 py-1.5 hover:bg-bg">Integrations</a>
-              {% if staff_roles %}<a href="{% url 'portal:ops_health' %}" class="block px-4 py-1.5 hover:bg-bg">System health</a>{% endif %}
-              {% if 'compliance' in staff_roles or 'finance' in staff_roles %}<a href="{% url 'portal:ops_audit' %}" class="block px-4 py-1.5 hover:bg-bg">Audit log</a>{% endif %}
-            </div>
-          </details>
-        {% else %}
-          <a href="{% url 'portal:dashboard' %}" class="hover:text-orange">Home</a>
-          <a href="{% url 'portal:payments' %}" class="hover:text-orange">Payments</a>
-          <a href="{% url 'portal:qr' %}" class="hover:text-orange">QR</a>
-          <a href="{% url 'portal:payment_links' %}" class="hover:text-orange">Links</a>
-          <a href="{% url 'portal:bulk' %}" class="hover:text-orange">Bulk pay</a>
-          <a href="{% url 'portal:settlements' %}" class="hover:text-orange">Settlements</a>
-          <a href="{% url 'portal:disputes' %}" class="hover:text-orange">Disputes</a>
-          <a href="{% url 'portal:webhooks' %}" class="hover:text-orange">Webhooks</a>
-          <a href="{% url 'portal:statements' %}" class="hover:text-orange">Statements</a>
-          <a href="{% url 'portal:api_keys' %}" class="hover:text-orange">Developers</a>
-          <a href="{% url 'portal:team' %}" class="hover:text-orange">Team</a>
-        {% endif %}
-        <a href="{% url 'portal:security' %}" class="hover:text-orange">Security</a>
-        <span class="opacity-60">{{ user.full_name|default:user.phone }}</span>
-        <a href="{% url 'portal:logout' %}" class="px-3 py-1 rounded-md bg-orange hover:bg-orange-dark">Sign out</a>
+  <div class="flex min-h-screen">
+    <aside id="sp-sidebar" class="sp-sidebar bg-ink text-white text-sm flex flex-col" aria-label="Main menu">
+      <div class="h-14 px-4 flex items-center justify-between border-b border-white/10">
+        <a href="{% if staff == 'staff' %}{% url 'portal:admin_dashboard' %}{% else %}{% url 'portal:dashboard' %}{% endif %}"
+           class="font-bold tracking-wide">SOKO<span class="text-orange">PAY</span>
+          <span class="block text-[10px] font-normal tracking-normal text-white/50">{% if staff == 'staff' %}Back office{% else %}Business portal{% endif %}</span></a>
+        <button type="button" class="sp-close p-2 rounded-md hover:bg-white/10" data-toggle-sidebar data-label="off" aria-label="Close menu">✕</button>
+      </div>
+      <nav class="flex-1 px-2 pb-6 space-y-0.5">
+        {% if staff == 'staff' %}{% include "portal/_nav_staff.html" %}{% else %}{% include "portal/_nav_merchant.html" %}{% endif %}
       </nav>
-    </div>
-  </header>
-  {% endwith %}
-{% endif %}
+      <div class="px-4 py-3 border-t border-white/10 text-xs text-white/60">
+        <div class="truncate">{{ user.full_name|default:user.phone }}</div>
+        <a href="{% url 'portal:logout' %}" class="text-orange hover:underline">Sign out</a>
+      </div>
+    </aside>
+    <div class="sp-backdrop" data-toggle-sidebar data-label="off" aria-hidden="true"></div>
 
-<main class="max-w-6xl mx-auto px-4 py-6">
+    <div class="flex-1 min-w-0 flex flex-col">
+      <header class="h-14 bg-surface border-b border-gray-200 flex items-center gap-3 px-4 sticky top-0 z-20">
+        <button type="button" data-toggle-sidebar aria-controls="sp-sidebar" aria-expanded="true" aria-label="Hide menu"
+                class="p-2 -ml-2 rounded-md hover:bg-bg" title="Show or hide the menu">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14"/></svg>
+        </button>
+        <span class="font-semibold text-sm truncate">{% if staff == 'staff' %}SokoPay back office{% else %}{{ nav_business|default:"SokoPay business" }}{% endif %}</span>
+        <div class="ml-auto flex items-center gap-3 text-sm">
+          <span class="hidden sm:inline text-ink/60">{{ user.full_name|default:user.phone }}</span>
+          <a href="{% url 'portal:logout' %}" class="px-3 py-1 rounded-md bg-orange hover:bg-orange-dark text-white">Sign out</a>
+        </div>
+      </header>
+      <main class="w-full max-w-7xl mx-auto px-4 py-6 flex-1">
+  {% endwith %}
+{% else %}
+  <main class="max-w-6xl mx-auto px-4 py-6">
+{% endif %}
   {% if messages %}
     <div class="space-y-2 mb-4">
       {% for m in messages %}
@@ -90,7 +125,11 @@
     </div>
   {% endif %}
   {% block content %}{% endblock %}
-</main>
-  <footer class="max-w-6xl mx-auto px-4 py-6 text-xs text-ink/40 space-x-3"><a href="/legal/privacy-policy" class="hover:text-orange">Privacy</a><a href="/legal/merchant-terms" class="hover:text-orange">Merchant terms</a><a href="/legal/acceptable-use" class="hover:text-orange">Acceptable use</a><a href="/legal/complaints-and-disputes" class="hover:text-orange">Complaints</a></footer>
+  </main>
+  <footer class="max-w-7xl mx-auto w-full px-4 py-6 text-xs text-ink/40 space-x-3"><a href="/legal/privacy-policy" class="hover:text-orange">Privacy</a><a href="/legal/merchant-terms" class="hover:text-orange">Merchant terms</a><a href="/legal/acceptable-use" class="hover:text-orange">Acceptable use</a><a href="/legal/complaints-and-disputes" class="hover:text-orange">Complaints</a></footer>
+{% if show_nav %}
+    </div>
+  </div>
+{% endif %}
 </body>
 </html>
