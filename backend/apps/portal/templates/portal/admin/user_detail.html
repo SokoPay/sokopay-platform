@@ -1,0 +1,95 @@
+{% extends "portal/base.html" %}
+{% block title %}{{ u.full_name|default:"User" }} · SokoPay{% endblock %}
+{% block content %}
+<a href="{% url 'portal:admin_users' %}" class="text-sm text-orange">← Users</a>
+<div class="flex flex-wrap items-baseline justify-between gap-2 mt-2 mb-1">
+  <h1 class="text-xl font-semibold">{{ u.full_name|default:"Unnamed user" }}</h1>
+  <span class="text-sm">
+    {% if u.closed_at %}<span class="text-ink/50">Account closed {{ u.closed_at|date:"d M Y" }}</span>
+    {% elif not u.is_active %}<span class="text-danger font-medium">Sign-in disabled</span>
+    {% else %}<span class="text-success">Active</span>{% endif %}
+    {% if kyc.frozen %} · <span class="text-danger font-medium">Wallet on hold</span>{% endif %}
+  </span>
+</div>
+<p class="text-sm text-ink/60 mb-6">{{ u.get_user_type_display }} · joined {{ u.created_at|date:"d M Y" }} · this view is recorded in the audit log</p>
+
+<div class="grid lg:grid-cols-3 gap-4 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-1">
+    <h2 class="font-medium mb-2">Profile</h2>
+    <div><span class="text-ink/50">Phone:</span> <span class="font-mono">{{ u.phone }}</span></div>
+    <div><span class="text-ink/50">Email:</span> {{ u.email|default:"—" }}</div>
+    <div><span class="text-ink/50">Address:</span> {{ u.address|default:"—" }}</div>
+    <div><span class="text-ink/50">GPS address:</span> {{ u.gps_address|default:"—" }}</div>
+    <div><span class="text-ink/50">Wallet balance:</span> {{ balance }}</div>
+    {% for m in memberships %}<div><span class="text-ink/50">Business:</span> {{ m.merchant.trading_name|default:m.merchant.legal_name }} ({{ m.get_role_display }})</div>{% endfor %}
+    {% if agent %}<div><span class="text-ink/50">Agent:</span> <a class="text-orange" href="{% url 'portal:ops_agent' agent.pk %}">{{ agent.display_name }}</a> ({{ agent.get_status_display }})</div>{% endif %}
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-1">
+    <h2 class="font-medium mb-2">Identity (KYC)</h2>
+    <div><span class="text-ink/50">Tier:</span> {{ kyc.get_tier_display|default:"Tier 0 (phone only)" }}</div>
+    <div><span class="text-ink/50">Ghana Card:</span> {{ kyc.ghana_card_masked|default:"not verified" }}</div>
+    {% if kyc.verified_name %}<div><span class="text-ink/50">Name on card:</span> {{ kyc.verified_name }}</div>{% endif %}
+    {% if kyc.frozen %}<div class="text-danger"><span class="text-ink/50">Hold reason:</span> {{ kyc.frozen_reason }}</div>{% endif %}
+    <h3 class="font-medium pt-2">ID documents</h3>
+    {% for d in documents %}<div>{{ d.get_doc_type_display }} ••{{ d.number_last4 }} · {{ d.get_status_display }}
+      {% if d.status == 'pending' %}<a class="text-orange" href="{% url 'portal:ops_kyc_document' d.pk %}">Review</a>{% endif %}</div>
+    {% empty %}<div class="text-ink/40">None added.</div>{% endfor %}
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">Compliance cases</h2>
+    <ul class="space-y-1">{% for a in alerts %}
+      <li><a class="text-orange" href="{% url 'portal:compliance_alert' a.pk %}">{{ a.title }}</a>
+        <span class="text-ink/50">· {{ a.severity }} · {{ a.get_status_display }}</span></li>
+    {% empty %}<li class="text-ink/40">No AML cases.</li>{% endfor %}</ul>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-3 gap-4">
+  <div class="lg:col-span-2 bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <h2 class="font-medium px-5 pt-4 pb-2">Recent activity</h2>
+    <table class="w-full text-sm">
+      <tbody>{% for t in activity %}<tr class="border-t border-gray-50">
+        <td class="px-5 py-2">{{ t.title }}<div class="text-xs text-ink/50">{{ t.subtitle }}</div></td>
+        <td class="text-xs text-ink/50">{{ t.created_at|slice:":16"|cut:"T" }}</td>
+        <td>{% include "portal/_status_pill.html" with status=t.status %}</td>
+        <td class="px-5 text-right tabular-nums">{{ t.amount_display }}</td></tr>
+      {% empty %}<tr><td class="px-5 py-6 text-ink/40">No activity.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+
+  <div class="space-y-4">
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-2">{% csrf_token %}
+      <input type="hidden" name="action" value="flag">
+      <h2 class="font-medium">Flag for compliance review</h2>
+      <p class="text-xs text-ink/50">Opens a case in the AML queue with your reason.</p>
+      <select name="severity" class="w-full border border-gray-200 rounded-md px-3 py-2">
+        <option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option>
+      </select>
+      <textarea name="reason" required rows="2" placeholder="Why? (e.g. customer reported fraud, unusual pattern)"
+                class="w-full border border-gray-200 rounded-md px-3 py-2"></textarea>
+      <button class="w-full border border-warning text-warning rounded-md py-2">Flag account</button>
+    </form>
+
+    {% if can_hold %}
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-2">{% csrf_token %}
+      <input type="hidden" name="action" value="{% if kyc.frozen %}release{% else %}hold{% endif %}">
+      <h2 class="font-medium">{% if kyc.frozen %}Release wallet hold{% else %}Hold wallet{% endif %}</h2>
+      <p class="text-xs text-ink/50">{% if kyc.frozen %}Money can move again.{% else %}Stops money leaving the wallet; money can still come in.{% endif %}</p>
+      <textarea name="reason" required rows="2" placeholder="Reason (audited)" class="w-full border border-gray-200 rounded-md px-3 py-2"></textarea>
+      <button class="w-full {% if kyc.frozen %}border border-ink/20{% else %}bg-danger text-white{% endif %} rounded-md py-2">{% if kyc.frozen %}Release hold{% else %}Place hold{% endif %}</button>
+    </form>
+    {% endif %}
+
+    {% if can_disable and not u.closed_at %}
+    <form method="post" class="bg-surface rounded-lg shadow-sm p-5 text-sm space-y-2">{% csrf_token %}
+      <input type="hidden" name="action" value="{% if u.is_active %}disable{% else %}enable{% endif %}">
+      <h2 class="font-medium">{% if u.is_active %}Disable sign-in{% else %}Enable sign-in{% endif %}</h2>
+      <p class="text-xs text-ink/50">{% if u.is_active %}Signs them out of every app and portal now and blocks sign-in.{% else %}Lets them sign in again.{% endif %}</p>
+      <textarea name="reason" required rows="2" placeholder="Reason (audited)" class="w-full border border-gray-200 rounded-md px-3 py-2"></textarea>
+      <button class="w-full {% if u.is_active %}bg-danger text-white{% else %}border border-ink/20{% endif %} rounded-md py-2"
+              {% if u.is_active %}onclick="return confirm('Disable sign-in for this account?')"{% endif %}>{% if u.is_active %}Disable sign-in{% else %}Enable sign-in{% endif %}</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

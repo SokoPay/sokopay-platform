@@ -66,7 +66,7 @@ def test_login_routes_merchant_and_staff_to_their_portals(merchant_owner, staff_
 
     r = _staff_login(staff_user).get("/dashboard/admin/")
     assert r.status_code == 200
-    assert b"Back-office overview" in r.content
+    assert b"Platform overview" in r.content
 
 
 def test_staff_must_enrol_and_pass_2fa(staff_user):

@@ -1,6 +1,7 @@
 from django.urls import path
 
-from . import views, views_bulk, views_compliance, views_merchant_ops, views_onboarding, views_ops
+from . import (views, views_admin, views_bulk, views_compliance, views_merchant_ops, views_onboarding,
+               views_ops)
 
 app_name = "portal"
 
@@ -37,7 +38,16 @@ urlpatterns = [
     path("bulk/<uuid:pk>/results.csv", views_bulk.bulk_results, name="bulk_results"),
 
     # Admin / back-office portal
-    path("admin/", views.admin_dashboard, name="admin_dashboard"),
+    path("admin/", views_admin.dashboard, name="admin_dashboard"),
+    path("admin/live/", views_admin.dashboard_live, name="admin_live"),
+    path("admin/users/", views_admin.users, name="admin_users"),
+    path("admin/users/<uuid:pk>/", views_admin.user_detail, name="admin_user"),
+    path("admin/transactions/", views_admin.transactions_page, name="admin_transactions"),
+    path("admin/transactions/export.csv", views_admin.transactions_export, name="admin_transactions_export"),
+    path("admin/payments/", views_admin.payments, name="admin_payments"),
+    path("admin/risk/", views_admin.risk, name="admin_risk"),
+    path("admin/insights/", views_admin.insights, name="admin_insights"),
+    path("admin/insights/ask/", views_admin.insights_ask, name="admin_insights_ask"),
     path("admin/merchants/", views.merchant_queue, name="merchant_queue"),
     path("admin/merchants/new/", views_onboarding.merchant_new, name="merchant_new"),
     path("admin/merchants/<uuid:pk>/", views.merchant_detail, name="merchant_detail"),

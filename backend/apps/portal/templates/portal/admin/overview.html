@@ -1,0 +1,9 @@
+{% extends "portal/base.html" %}
+{% block title %}Overview · SokoPay{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+  <h1 class="text-xl font-semibold">Platform overview</h1>
+  <span class="text-xs text-ink/50">Live: refreshes every 15 seconds</span>
+</div>
+{% include "portal/admin/_overview_live.html" %}
+{% endblock %}

@@ -1,0 +1,106 @@
+{% load money_tags %}
+<div id="overview-live" hx-get="{% url 'portal:admin_live' %}" hx-trigger="every 15s" hx-swap="outerHTML">
+  <p class="text-xs text-ink/40 mb-3">Updated {{ o.as_of|date:"H:i:s" }}</p>
+
+  {# --- needs attention ------------------------------------------------------------- #}
+  {% if o.work.aml_high_open %}
+  <a href="{% url 'portal:compliance' %}?severity=high" class="block bg-red-100 text-danger rounded-md px-4 py-3 text-sm mb-3">
+    {{ o.work.aml_high_open }} high-severity fraud/AML alert{{ o.work.aml_high_open|pluralize }} open — compliance review needed.
+  </a>
+  {% endif %}
+  {% if o.work.payouts_stuck %}
+  <a href="{% url 'portal:settlement_queue' %}#stuck" class="block bg-red-100 text-danger rounded-md px-4 py-3 text-sm mb-3">
+    {{ o.work.payouts_stuck }} settlement payout{{ o.work.payouts_stuck|pluralize }} stuck with the payment partner — investigate.
+  </a>
+  {% endif %}
+
+  {# --- headline numbers ----------------------------------------------------------- #}
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+    <a href="{% url 'portal:admin_users' %}" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+      <div class="text-sm text-ink/60">Total users</div>
+      <div class="text-3xl font-semibold mt-1">{{ o.users.total }}</div>
+      <div class="text-xs text-ink/50 mt-1">{{ o.users.customers }} customers · {{ o.users.merchant_users }} merchant · {{ o.users.agents }} agent{{ o.users.agents|pluralize }}</div>
+      <div class="text-xs text-ink/50">+{{ o.users.new_today }} today · +{{ o.users.new_7d }} this week</div>
+    </a>
+    <a href="{% url 'portal:admin_transactions' %}" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+      <div class="text-sm text-ink/60">Completed today</div>
+      <div class="text-3xl font-semibold mt-1">{{ o.today.completed_value|ghs }}</div>
+      <div class="text-xs text-ink/50 mt-1">{{ o.today.by_status.completed.count }} transactions
+        {% if change is not None %}· <span class="{% if change >= 0 %}text-success{% else %}text-danger{% endif %}">{% if change >= 0 %}+{% endif %}{{ change }}%</span> vs yesterday{% endif %}</div>
+    </a>
+    <a href="{% url 'portal:admin_transactions' %}?status=pending" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+      <div class="text-sm text-ink/60">In progress today</div>
+      <div class="text-3xl font-semibold mt-1">{{ o.today.by_status.pending.count|add:o.today.by_status.processing.count }}</div>
+      <div class="text-xs text-ink/50 mt-1">{{ o.today.by_status.pending.count }} pending · {{ o.today.by_status.processing.count }} processing</div>
+    </a>
+    <a href="{% url 'portal:admin_transactions' %}?status=failed" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40">
+      <div class="text-sm text-ink/60">Failure rate today</div>
+      <div class="text-3xl font-semibold mt-1 {% if o.today.failure_rate >= 20 %}text-danger{% endif %}">{{ o.today.failure_rate }}%</div>
+      <div class="text-xs text-ink/50 mt-1">{{ o.today.by_status.failed.count }} failed · {{ o.today.by_status.cancelled.count }} cancelled · {{ o.today.by_status.reversed.count }} reversed</div>
+    </a>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4 mb-6">
+    {# --- 14-day volume ------------------------------------------------------------ #}
+    <div class="lg:col-span-2 bg-surface rounded-lg shadow-sm p-5">
+      <h2 class="font-medium mb-1">Daily completed volume, last 14 days</h2>
+      <svg viewBox="0 0 280 48" class="w-full h-24" preserveAspectRatio="none" role="img" aria-label="14-day volume trend">
+        <polyline fill="none" stroke="#F26522" stroke-width="2" vector-effect="non-scaling-stroke" points="{{ spark }}"/>
+      </svg>
+      <div class="flex justify-between text-xs text-ink/40">
+        <span>{{ spark_days.0|date:"d M" }}</span><span>today</span>
+      </div>
+      <table class="w-full text-sm mt-3">
+        <thead class="text-ink/50 text-left"><tr><th class="py-1">Today by type</th><th class="text-right">Count</th><th class="text-right">Completed</th></tr></thead>
+        <tbody>{% for key, t in o.today.by_type.items %}<tr class="border-t border-gray-50">
+          <td class="py-1"><a class="hover:text-orange" href="{% url 'portal:admin_transactions' %}?type={{ key }}">{{ t.label }}</a></td>
+          <td class="text-right tabular-nums">{{ t.count }}</td><td class="text-right tabular-nums">{{ t.completed_value|ghs }}</td></tr>
+        {% empty %}<tr><td colspan="3" class="py-3 text-ink/40">No transactions yet today.</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+
+    {# --- compliance status --------------------------------------------------------- #}
+    <a href="{% url 'portal:admin_risk' %}" class="bg-surface rounded-lg shadow-sm p-5 hover:ring-2 hover:ring-orange/40 block">
+      <h2 class="font-medium mb-2">Compliance status</h2>
+      <div class="flex items-center gap-2 mb-2">
+        <span class="inline-block w-3 h-3 rounded-full {% if o.compliance.status == 'red' %}bg-danger{% elif o.compliance.status == 'amber' %}bg-warning{% else %}bg-success{% endif %}"></span>
+        <span class="font-semibold capitalize">{{ o.compliance.status }}</span>
+      </div>
+      <ul class="text-xs text-ink/60 mb-3 list-disc pl-4">{% for r in o.compliance.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+      <dl class="text-sm grid grid-cols-2 gap-y-1">
+        <dt class="text-ink/60">AML alerts (high)</dt><dd class="text-right">{{ o.compliance.alerts_high }}</dd>
+        <dt class="text-ink/60">AML alerts (other)</dt><dd class="text-right">{{ o.compliance.alerts_medium|add:o.compliance.alerts_low }}</dd>
+        <dt class="text-ink/60">Unassigned alerts</dt><dd class="text-right">{{ o.compliance.alerts_unassigned }}</dd>
+        <dt class="text-ink/60">Screening to review</dt><dd class="text-right">{{ o.compliance.screening_pending }}</dd>
+        <dt class="text-ink/60">ID documents pending</dt><dd class="text-right">{{ o.compliance.id_docs_pending }}</dd>
+        <dt class="text-ink/60">STRs to approve / file</dt><dd class="text-right">{{ o.compliance.str_drafts }} / {{ o.compliance.str_to_file }}</dd>
+        <dt class="text-ink/60">Wallets on hold</dt><dd class="text-right">{{ o.users.held }}</dd>
+      </dl>
+    </a>
+  </div>
+
+  <div class="grid lg:grid-cols-3 gap-4">
+    {# --- system alerts ------------------------------------------------------------- #}
+    <div class="lg:col-span-2 bg-surface rounded-lg shadow-sm p-5">
+      <h2 class="font-medium mb-2">System alerts</h2>
+      <ul class="text-sm divide-y divide-gray-50">
+        {% for a in o.system_alerts %}
+        <li class="py-2 flex justify-between gap-3">
+          <a href="{% url a.url %}" class="hover:text-orange {% if a.severity == 'high' %}text-danger font-medium{% endif %}">{{ a.label }}</a>
+          <span class="tabular-nums">{{ a.count }}</span>
+        </li>
+        {% empty %}<li class="py-2 text-success">All clear: nothing stuck or overdue.</li>{% endfor %}
+      </ul>
+    </div>
+    {# --- work queues --------------------------------------------------------------- #}
+    <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+      <h2 class="font-medium mb-2">Waiting for a decision</h2>
+      <ul class="space-y-1">
+        <li class="flex justify-between"><a class="hover:text-orange" href="{% url 'portal:merchant_queue' %}">Merchants awaiting review</a><span>{{ o.work.merchants_review }}</span></li>
+        <li class="flex justify-between"><a class="hover:text-orange" href="{% url 'portal:settlement_queue' %}">Settlements awaiting approval</a><span>{{ o.work.settlements_awaiting }}</span></li>
+        <li class="flex justify-between"><a class="hover:text-orange" href="{% url 'portal:ops_kyc' %}">ID documents to review</a><span>{{ o.compliance.id_docs_pending }}</span></li>
+        <li class="flex justify-between"><span class="text-ink/60">Approved merchants</span><span>{{ o.work.merchants_approved }}</span></li>
+      </ul>
+    </div>
+  </div>
+</div>

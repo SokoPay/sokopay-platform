@@ -1,0 +1,72 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Payments & settlement · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-4">Payments &amp; settlement</h1>
+
+<div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/60">Settled (7 days)</div>
+    <div class="text-xl font-semibold">{{ p.paid_value|ghs }}</div><div class="text-xs text-ink/50">{{ p.paid_count }} payouts</div></div>
+  <a href="{% url 'portal:settlement_queue' %}" class="bg-surface rounded-lg shadow-sm p-4 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">Awaiting approval</div>
+    <div class="text-xl font-semibold">{{ p.awaiting_approval|length }}</div><div class="text-xs text-ink/50">maker-checker</div></a>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/60">With the partner</div>
+    <div class="text-xl font-semibold">{{ p.processing|length }}</div><div class="text-xs {% if p.stuck %}text-danger{% else %}text-ink/50{% endif %}">{{ p.stuck }} stuck</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/60">Refunds in progress</div>
+    <div class="text-xl font-semibold">{{ p.refunds_processing }}</div></div>
+  <a href="{% url 'portal:ops_recon' %}" class="bg-surface rounded-lg shadow-sm p-4 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">Reconciliation breaks open</div>
+    <div class="text-xl font-semibold {% if p.recon_breaks_open %}text-danger{% endif %}">{{ p.recon_breaks_open }}</div></a>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-4 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <h2 class="font-medium px-5 pt-4 pb-2">Pending payouts</h2>
+    <table class="w-full text-sm"><tbody>
+      {% for s in p.awaiting_approval %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right tabular-nums">{{ s.amount_minor|ghs }}</td><td class="px-3">{% include "portal/_status_pill.html" with status=s.status %}</td>
+        <td class="text-xs text-ink/50">{{ s.created_at|date:"d M H:i" }}</td></tr>{% endfor %}
+      {% for s in p.processing %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right tabular-nums">{{ s.amount_minor|ghs }}</td><td class="px-3">{% include "portal/_status_pill.html" with status=s.status %}</td>
+        <td class="text-xs text-ink/50">{{ s.created_at|date:"d M H:i" }}</td></tr>{% endfor %}
+      {% if not p.awaiting_approval and not p.processing %}<tr><td class="px-5 py-6 text-ink/40">No pending payouts.</td></tr>{% endif %}
+    </tbody></table>
+    <p class="px-5 py-3 text-xs"><a class="text-orange" href="{% url 'portal:settlement_queue' %}">Approve or recheck in Approvals →</a></p>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <h2 class="font-medium px-5 pt-4 pb-2">Completed settlements (7 days)</h2>
+    <table class="w-full text-sm"><tbody>
+      {% for s in p.paid_recent %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right tabular-nums">{{ s.amount_minor|ghs }}</td><td class="font-mono text-xs px-3">{{ s.rail_ref|default:"—" }}</td>
+        <td class="text-xs text-ink/50">{{ s.completed_at|date:"d M H:i" }}</td></tr>
+      {% empty %}<tr><td class="px-5 py-6 text-ink/40">None in the last 7 days.</td></tr>{% endfor %}
+      {% for s in p.failed_recent %}<tr class="border-t border-gray-50 bg-red-50"><td class="px-5 py-2">{{ s.merchant.trading_name|default:s.merchant.legal_name }}</td>
+        <td class="text-right tabular-nums">{{ s.amount_minor|ghs }}</td><td class="px-3 text-xs text-danger">failed: {{ s.failure_code|default:"—" }}</td>
+        <td class="text-xs text-ink/50">{{ s.updated_at|date:"d M H:i" }}</td></tr>{% endfor %}
+    </tbody></table>
+  </div>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-4">
+  <div class="bg-surface rounded-lg shadow-sm p-5 text-sm">
+    <h2 class="font-medium mb-2">Payment gateways</h2>
+    <p class="text-ink/60 mb-2">Active payment partner (rail): <strong>{{ p.rail_provider }}</strong>{% if p.rail_provider == 'mock' %} <span class="text-warning">(test partner, not real money)</span>{% endif %}</p>
+    <ul class="divide-y divide-gray-50">{% for r in p.rails %}
+      <li class="py-1 flex justify-between"><span>{{ r.name }}{% if r.active %} · <span class="text-success">active</span>{% endif %}</span>
+        <span class="text-xs text-ink/50">last callback {{ r.last_event|date:"d M H:i"|default:"never" }}</span></li>{% endfor %}</ul>
+    <h3 class="font-medium mt-4 mb-1">Connected services</h3>
+    <ul class="divide-y divide-gray-50">{% for g in p.gateways %}
+      <li class="py-1 flex justify-between gap-2"><span>{{ g.name }}</span><span class="text-xs {% if g.status == 'available' %}text-success{% elif g.status == 'placeholder' %}text-warning{% else %}text-ink/50{% endif %}">{{ g.status }}</span></li>{% endfor %}</ul>
+    <p class="mt-2 text-xs"><a class="text-orange" href="{% url 'portal:integrations' %}">All integrations →</a></p>
+  </div>
+  <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <h2 class="font-medium px-5 pt-4 pb-2">Reconciliation (latest runs)</h2>
+    <table class="w-full text-sm">
+      <thead class="text-ink/50 text-left"><tr><th class="px-5 py-1">Date</th><th>Partner</th><th class="text-right">Matched</th><th class="text-right px-5">Breaks</th></tr></thead>
+      <tbody>{% for run in p.recon_runs %}<tr class="border-t border-gray-50">
+        <td class="px-5 py-2"><a class="text-orange" href="{% url 'portal:ops_recon_run' run.pk %}">{{ run.date|date:"d M Y" }}</a></td><td>{{ run.rail }}</td>
+        <td class="text-right">{{ run.matched_count }}</td>
+        <td class="text-right px-5 {% if run.mismatch_count or run.ours_only_count or run.theirs_only_count %}text-danger{% endif %}">{{ run.mismatch_count|add:run.ours_only_count|add:run.theirs_only_count }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="px-5 py-6 text-ink/40">No reconciliation runs yet.</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

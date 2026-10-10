@@ -19,9 +19,7 @@ import segno
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login, logout, update_session_auth_hash
-from django.core.exceptions import ValidationError
-from django.core.exceptions import PermissionDenied
-from django.db.models import Count
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django_otp import login as otp_login
@@ -31,7 +29,6 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from apps.accounts import otp
 from apps.common.audit import record as audit
 from apps.common.money import Money, MoneyError
-from apps.compliance.models import Alert as AmlAlert
 from apps.merchants import api_keys, onboarding, settlement
 from apps.merchants.exceptions import ApprovalError, MerchantError, SettlementError
 from apps.merchants.models import ApiKey, Merchant, Settlement, SettlementAccount
@@ -505,26 +502,6 @@ def qr_request_status(request, token):
 # ---------------------------------------------------------------------------
 # Admin / back-office portal
 # ---------------------------------------------------------------------------
-@staff_required
-def admin_dashboard(request):
-    by_status = dict(
-        Merchant.objects.values_list("status").annotate(n=Count("id")).values_list("status", "n")
-    )
-    context = {
-        "merchant_counts": by_status,
-        "pending_review": Merchant.objects.filter(
-            status__in=[Merchant.Status.SUBMITTED, Merchant.Status.IN_REVIEW]
-        ).count(),
-        "settlements_awaiting": Settlement.objects.filter(
-            status=Settlement.Status.AWAITING_APPROVAL
-        ).count(),
-        "payouts_stuck": settlement.stuck_settlements().count(),
-        "aml_high_open": AmlAlert.objects.filter(
-            severity="high", status__in=("open", "investigating", "escalated")).count(),
-    }
-    return render(request, "portal/admin/dashboard.html", context)
-
-
 @staff_required
 def safeguarding(request):
     """E-money vs trust funds. Staff record bank-statement balances and run the check."""

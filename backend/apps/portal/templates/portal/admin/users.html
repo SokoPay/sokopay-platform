@@ -1,0 +1,67 @@
+{% extends "portal/base.html" %}
+{% block title %}Users · SokoPay{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+  <h1 class="text-xl font-semibold">Users</h1>
+  <span class="text-sm text-ink/60">{{ counts.total }} total · {{ counts.held }} on hold · {{ counts.disabled }} sign-in disabled</span>
+</div>
+
+<form method="get" class="bg-surface rounded-lg shadow-sm p-4 mb-4 grid sm:grid-cols-5 gap-2 text-sm">
+  <input name="q" value="{{ q }}" placeholder="Phone, name, email or wallet ID" class="sm:col-span-2 border border-gray-200 rounded-md px-3 py-2">
+  <select name="type" class="border border-gray-200 rounded-md px-3 py-2">
+    <option value="">All types</option>
+    <option value="consumer" {% if type == 'consumer' %}selected{% endif %}>Customers</option>
+    <option value="merchant" {% if type == 'merchant' %}selected{% endif %}>Merchant users</option>
+    <option value="agent" {% if type == 'agent' %}selected{% endif %}>Agents</option>
+  </select>
+  <select name="state" class="border border-gray-200 rounded-md px-3 py-2">
+    <option value="">Any status</option>
+    <option value="flagged" {% if state == 'flagged' %}selected{% endif %}>Flagged (open AML case)</option>
+    <option value="held" {% if state == 'held' %}selected{% endif %}>Wallet on hold</option>
+    <option value="disabled" {% if state == 'disabled' %}selected{% endif %}>Sign-in disabled</option>
+    <option value="closed" {% if state == 'closed' %}selected{% endif %}>Closed</option>
+  </select>
+  <div class="flex gap-2">
+    <select name="tier" class="flex-1 border border-gray-200 rounded-md px-3 py-2">
+      <option value="">Any KYC tier</option>
+      <option value="0" {% if tier == '0' %}selected{% endif %}>Tier 0</option>
+      <option value="1" {% if tier == '1' %}selected{% endif %}>Tier 1</option>
+      <option value="2" {% if tier == '2' %}selected{% endif %}>Tier 2</option>
+    </select>
+    <button class="bg-orange hover:bg-orange-dark text-white rounded-md px-4">Search</button>
+  </div>
+</form>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Name</th><th>Phone</th><th>Type</th><th>KYC</th><th>Status</th><th>Joined</th><th></th></tr></thead>
+    <tbody>
+    {% for u in page %}
+      <tr class="border-t border-gray-50">
+        <td class="px-4 py-2">{{ u.full_name|default:"—" }}</td>
+        <td class="font-mono text-xs">{{ u.phone_masked }}</td>
+        <td>{{ u.get_user_type_display }}</td>
+        <td>Tier {{ u.kyc.tier|default:0 }}</td>
+        <td class="space-x-1">
+          {% if u.closed_at %}<span class="text-ink/50">Closed</span>
+          {% elif not u.is_active %}<span class="text-danger">Sign-in disabled</span>
+          {% else %}<span class="text-success">Active</span>{% endif %}
+          {% if u.kyc.frozen %}<span class="px-1.5 rounded bg-red-100 text-danger text-xs">Hold</span>{% endif %}
+          {% if u.flagged %}<span class="px-1.5 rounded bg-amber-100 text-warning text-xs">Flagged</span>{% endif %}
+        </td>
+        <td>{{ u.created_at|date:"d M Y" }}</td>
+        <td class="px-4 text-right"><a class="text-orange" href="{% url 'portal:admin_user' u.pk %}">Open →</a></td>
+      </tr>
+    {% empty %}<tr><td colspan="7" class="px-4 py-8 text-center text-ink/40">No users match.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+<div class="flex justify-between text-sm mt-3">
+  <span class="text-ink/50">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+  <span class="space-x-3">
+    {% if page.has_previous %}<a class="text-orange" href="?q={{ q|urlencode }}&type={{ type }}&state={{ state }}&tier={{ tier }}&page={{ page.previous_page_number }}">← Newer</a>{% endif %}
+    {% if page.has_next %}<a class="text-orange" href="?q={{ q|urlencode }}&type={{ type }}&state={{ state }}&tier={{ tier }}&page={{ page.next_page_number }}">Older →</a>{% endif %}
+  </span>
+</div>
+<p class="text-xs text-ink/40 mt-4">Phone numbers are masked here. Opening a profile shows the full details and is recorded in the audit log.</p>
+{% endblock %}

@@ -35,6 +35,7 @@ google-auth==2.38.0               # OAuth2 for Firebase Cloud Messaging (push)
 openpyxl==3.1.5                   # read merchant bulk-payment spreadsheets (.xlsx)
 defusedxml==0.7.1                 # safe XML parsing (sanctions list imports)
 requests==2.34.2                  # outbound HTTP (rails, merchant webhooks); was only a transitive dep
+anthropic==1.13.0                 # AI insights (off unless AI_PROVIDER=anthropic); aggregates only
 markdown==3.11                     # renders the legal pages (docs/legal) for the apps and portal
 
 # --- Testing & quality (also used in CI) ---

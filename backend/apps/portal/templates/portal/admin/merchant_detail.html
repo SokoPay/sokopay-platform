@@ -24,7 +24,7 @@
       <li class="py-2 flex justify-between items-center gap-2">
         <span>{{ d.get_kind_display }}</span>
         <span class="flex items-center gap-3">
-          {% if d.storage_key %}<a href="{% url 'portal:merchant_document' m.pk d.pk %}" class="text-orange">Download</a>{% endif %}
+          {% if d.storage_key %}<a hx-boost="false" href="{% url 'portal:merchant_document' m.pk d.pk %}" class="text-orange">Download</a>{% endif %}
           {% include "portal/_status_pill.html" with status=d.status %}
         </span>
       </li>

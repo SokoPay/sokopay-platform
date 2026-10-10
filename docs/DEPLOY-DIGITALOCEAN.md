@@ -436,14 +436,44 @@ No shell commands are needed; everything is in the portal.
 
 **Documents** are kept in the `media` Docker volume, encrypted with `FIELD_ENCRYPTION_KEY`. `scripts/backup.sh` backs them up next to the database (`*.media.tgz`), and `wipe.sh` deletes them with everything else.
 
-### 12.5 USSD
+### 12.5 The admin command centre
+
+Staff sign in at `/dashboard/`. The top menu shows only the sections their role allows:
+
+| Section | Who | What |
+|---|---|---|
+| **Overview** | All staff | Live (refreshes every 15 s): total users, today's completed volume vs yesterday, in-progress and failed, 14-day trend, system alerts, compliance status (green / amber / red), queues waiting for a decision |
+| **Users** | Support, operations, compliance | Search by phone, name, email or wallet ID; filter by type, status, KYC tier. Phones are masked in the list; opening a profile is audit-logged. Actions: **flag for review** (opens an AML case), **hold wallet** (compliance), **disable sign-in** (compliance, operations; ends every session at once). Each needs a reason. |
+| **Transactions** | Operations, finance, compliance, support | Every money movement for a day in one list: completed / pending / processing / failed / cancelled / reversed, with amounts, fees and timestamps, and a ⚑ on anything cited by an AML case. Filter by status, type, reference. CSV export (finance, compliance): masked, audited, one day at a time. |
+| **Payments** | Finance, operations | Completed settlements, pending payouts (approval and with the partner), stuck payouts, refunds, the active payment partner and connected services, reconciliation runs and open breaks |
+| **Risk** | Compliance | Pending KYC (ID documents, merchant reviews), high-risk accounts (open high-severity cases, holds, high-risk merchants, sanctions/PEP matches), open AML alerts |
+| **Insights** | Compliance, finance, operations | Statistics computed on your own server (volume spikes, failure jumps, unusual sign-ups, fast-sending accounts, AML trends, backlogs, tomorrow's forecast), plus the optional AI |
+
+**Switching on the AI (optional).** Add to `/sokopay/deploy/.env`, then run `docker compose up -d`:
+
+```dotenv
+AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=<your key>
+AI_CHAT_ENABLED=True
+```
+
+What protects customer data:
+- The AI can't query the database. It only gets totals from fixed reports, and groups smaller than 5 are hidden.
+- Anything that looks like a phone, ID, email, reference or account number is removed from questions, data and answers.
+- Only compliance, finance and operations staff can use it.
+- Each person is limited to 20 questions an hour, with a daily token budget across all staff.
+- Every use is listed in **Insights → AI usage log** and the audit log.
+
+A briefing is written every morning at 06:30. Before using it with real customers, note this external processing in your Data Protection Commission records.
+
+### 12.6 USSD
 
 ```bash
 curl -s -X POST "https://sokopay.theagbeko.com/api/v1/ussd/callback?key=<USSD_SHARED_SECRET from .env>" \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 ```
 
-### 12.6 Following the demo guide
+### 12.7 Following the demo guide
 
 Every walkthrough in `docs/SokoPay-Demo-Guide.pdf` works on the server with these changes:
 - Use `https://sokopay.theagbeko.com` instead of `http://127.0.0.1:8000`.

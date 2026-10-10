@@ -1,0 +1,53 @@
+{% extends "portal/base.html" %}
+{% block title %}Compliance & risk · SokoPay{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+  <h1 class="text-xl font-semibold">Compliance &amp; risk</h1>
+  <span class="flex items-center gap-2 text-sm">
+    <span class="inline-block w-3 h-3 rounded-full {% if c.status == 'red' %}bg-danger{% elif c.status == 'amber' %}bg-warning{% else %}bg-success{% endif %}"></span>
+    <strong class="capitalize">{{ c.status }}</strong> · {{ c.reasons|join:"; " }}
+  </span>
+</div>
+
+<div class="grid grid-cols-2 lg:grid-cols-6 gap-3 mb-6 text-sm">
+  <a href="{% url 'portal:compliance' %}?severity=high" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">AML high</div><div class="text-xl font-semibold {% if c.alerts_high %}text-danger{% endif %}">{{ c.alerts_high }}</div><div class="text-xs text-ink/50">{{ c.overdue_high }} over 48 h</div></a>
+  <a href="{% url 'portal:compliance' %}" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">AML medium / low</div><div class="text-xl font-semibold">{{ c.alerts_medium }} / {{ c.alerts_low }}</div><div class="text-xs text-ink/50">{{ c.alerts_unassigned }} unassigned</div></a>
+  <a href="{% url 'portal:compliance_screening' %}" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">Screening matches</div><div class="text-xl font-semibold">{{ c.screening_pending }}</div><div class="text-xs text-ink/50">to review</div></a>
+  <a href="{% url 'portal:ops_kyc' %}" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">Pending KYC</div><div class="text-xl font-semibold">{{ c.id_docs_pending }}</div><div class="text-xs text-ink/50">ID documents</div></a>
+  <a href="{% url 'portal:merchant_queue' %}" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">Merchant KYB</div><div class="text-xl font-semibold">{{ c.merchants_in_review }}</div><div class="text-xs text-ink/50">in review</div></a>
+  <a href="{% url 'portal:compliance_reports' %}" class="bg-surface rounded-lg shadow-sm p-3 hover:ring-2 hover:ring-orange/40"><div class="text-xs text-ink/60">STRs</div><div class="text-xl font-semibold">{{ c.str_drafts }} / {{ c.str_to_file }}</div><div class="text-xs text-ink/50">draft / to file</div></a>
+</div>
+
+<div class="grid lg:grid-cols-2 gap-4 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+    <h2 class="font-medium px-5 pt-4 pb-2">Open AML alerts</h2>
+    <table class="w-full text-sm"><tbody>{% for a in alerts %}<tr class="border-t border-gray-50">
+      <td class="px-5 py-2"><a class="text-orange" href="{% url 'portal:compliance_alert' a.pk %}">{{ a.title }}</a><div class="text-xs text-ink/50">{{ a.subject_label }}</div></td>
+      <td class="text-xs {% if a.severity == 'high' %}text-danger font-medium{% endif %}">{{ a.severity }}</td>
+      <td class="text-xs text-ink/50 px-3">{{ a.get_status_display }}<br>{{ a.last_seen|date:"d M H:i" }}</td></tr>
+    {% empty %}<tr><td class="px-5 py-6 text-ink/40">No open alerts.</td></tr>{% endfor %}</tbody></table>
+  </div>
+  <div class="space-y-4">
+    <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+      <h2 class="font-medium px-5 pt-4 pb-2">Pending KYC verification</h2>
+      <table class="w-full text-sm"><tbody>
+        {% for d in id_docs %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ d.user.full_name|default:"—" }}</td><td>{{ d.get_doc_type_display }}</td>
+          <td class="text-xs text-ink/50">{{ d.created_at|date:"d M H:i" }}</td><td class="px-5 text-right"><a class="text-orange" href="{% url 'portal:ops_kyc_document' d.pk %}">Review</a></td></tr>{% endfor %}
+        {% for m in merchants_review %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ m.trading_name|default:m.legal_name }}</td><td>Merchant KYB</td>
+          <td class="text-xs text-ink/50">{{ m.created_at|date:"d M H:i" }}</td><td class="px-5 text-right"><a class="text-orange" href="{% url 'portal:merchant_detail' m.pk %}">Review</a></td></tr>{% endfor %}
+        {% if not id_docs and not merchants_review %}<tr><td class="px-5 py-6 text-ink/40">Nothing waiting.</td></tr>{% endif %}
+      </tbody></table>
+    </div>
+    <div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+      <h2 class="font-medium px-5 pt-4 pb-2">High-risk accounts</h2>
+      <table class="w-full text-sm"><tbody>
+        {% for u in high_users %}<tr class="border-t border-gray-50"><td class="px-5 py-2"><a class="text-orange" href="{% url 'portal:admin_user' u.pk %}">{{ u.full_name|default:u.phone_masked }}</a></td><td class="text-xs">open high-severity case</td></tr>{% endfor %}
+        {% for h in held %}<tr class="border-t border-gray-50"><td class="px-5 py-2"><a class="text-orange" href="{% url 'portal:admin_user' h.user.pk %}">{{ h.user.full_name|default:h.phone_masked }}</a></td><td class="text-xs">wallet on hold: {{ h.frozen_reason|truncatechars:60 }}</td></tr>{% endfor %}
+        {% for m in high_merchants %}<tr class="border-t border-gray-50"><td class="px-5 py-2"><a class="text-orange" href="{% url 'portal:merchant_detail' m.pk %}">{{ m.trading_name|default:m.legal_name }}</a></td><td class="text-xs">merchant risk tier: high</td></tr>{% endfor %}
+        {% for s in screening %}<tr class="border-t border-gray-50"><td class="px-5 py-2">{{ s.name_screened }}</td><td class="text-xs">{{ s.get_status_display }} screening match ({{ s.entry_kind }})</td></tr>{% endfor %}
+        {% if not high_users and not held and not high_merchants and not screening %}<tr><td class="px-5 py-6 text-ink/40">No high-risk accounts.</td></tr>{% endif %}
+      </tbody></table>
+    </div>
+  </div>
+</div>
+{% endblock %}

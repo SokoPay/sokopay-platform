@@ -1,6 +1,7 @@
 {% comment %}Renders a coloured status pill. Usage: {% include "portal/_status_pill.html" with status=p.status %}{% endcomment %}
 <span class="inline-block px-2 py-0.5 rounded-full text-xs font-medium
-  {% if status == 'succeeded' or status == 'approved' or status == 'paid' %}bg-green-100 text-success
+  {% if status == 'succeeded' or status == 'approved' or status == 'paid' or status == 'completed' or status == 'verified' %}bg-green-100 text-success
   {% elif status == 'failed' or status == 'rejected' %}bg-red-100 text-danger
   {% elif status == 'processing' %}bg-blue-100 text-blue-700
+  {% elif status == 'cancelled' or status == 'reversed' or status == 'expired' or status == 'replaced' %}bg-gray-100 text-ink/60
   {% else %}bg-amber-100 text-warning{% endif %}">{{ status }}</span>

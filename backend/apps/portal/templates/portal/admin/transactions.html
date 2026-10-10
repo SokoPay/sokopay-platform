@@ -1,0 +1,58 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Transactions · SokoPay{% endblock %}
+{% block content %}
+<div class="flex flex-wrap items-baseline justify-between gap-2 mb-4">
+  <h1 class="text-xl font-semibold">Transactions · {{ day|date:"D d M Y" }}</h1>
+  <span class="text-sm text-ink/60">{{ s.total_count }} transactions · {{ s.completed_value|ghs }} completed · {{ s.failure_rate }}% failed</span>
+</div>
+
+{% include "portal/admin/_txn_summary.html" %}
+
+<form method="get" class="bg-surface rounded-lg shadow-sm p-4 mb-4 grid sm:grid-cols-6 gap-2 text-sm items-center">
+  <input type="date" name="day" value="{{ day|date:'Y-m-d' }}" max="{{ today|date:'Y-m-d' }}" class="border border-gray-200 rounded-md px-3 py-2">
+  <select name="status" class="border border-gray-200 rounded-md px-3 py-2">
+    <option value="">Any status</option>
+    {% for st in statuses %}<option value="{{ st }}" {% if status == st %}selected{% endif %}>{% for k, label in labels.items %}{% if k == st %}{{ label }}{% endif %}{% endfor %}</option>{% endfor %}
+  </select>
+  <select name="type" class="border border-gray-200 rounded-md px-3 py-2">
+    <option value="">All types</option>
+    {% for key, label in types.items %}<option value="{{ key }}" {% if type == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <input name="q" value="{{ q }}" placeholder="Reference (e.g. SP-…)" class="border border-gray-200 rounded-md px-3 py-2">
+  <label class="flex items-center gap-2"><input type="checkbox" name="flagged" value="1" {% if flagged %}checked{% endif %}> Flagged by compliance</label>
+  <div class="flex gap-2">
+    <button class="flex-1 bg-orange hover:bg-orange-dark text-white rounded-md py-2">Filter</button>
+    {% if can_export %}<a hx-boost="false" href="{% url 'portal:admin_transactions_export' %}?day={{ day|date:'Y-m-d' }}" class="border border-ink/20 hover:border-orange rounded-md px-3 py-2" title="CSV, masked, audited">CSV</a>{% endif %}
+  </div>
+</form>
+
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto">
+  <table class="w-full text-sm">
+    <thead class="text-ink/50 text-left"><tr>
+      <th class="px-4 py-2">Time</th><th>Type</th><th>Reference</th><th>Who</th>
+      <th class="text-right">Amount</th><th class="text-right">Fee</th><th class="px-3">Status</th><th>Updated</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rows %}
+      <tr class="border-t border-gray-50 {% if r.flagged %}bg-amber-50{% endif %}">
+        <td class="px-4 py-2 tabular-nums whitespace-nowrap">{{ r.created_at|date:"H:i:s" }}</td>
+        <td>{{ r.type }}</td>
+        <td class="font-mono text-xs">{{ r.reference|default:"—" }}</td>
+        <td>{% if r.user_url %}<a class="hover:text-orange" href="{{ r.user_url }}">{{ r.party|default:"—" }}</a>{% else %}{{ r.party|default:"—" }}{% endif %}</td>
+        <td class="text-right tabular-nums">{{ r.amount_minor|ghs }}</td>
+        <td class="text-right tabular-nums text-ink/60">{% if r.fee_minor %}{{ r.fee_minor|ghs }}{% else %}—{% endif %}</td>
+        <td class="px-3" title="{{ r.status_raw }}">{% include "portal/_status_pill.html" with status=r.status %}</td>
+        <td class="tabular-nums text-xs text-ink/50 whitespace-nowrap">{{ r.updated_at|date:"H:i:s" }}</td>
+        <td class="pr-3">{% if r.flagged %}<a href="{% url 'portal:compliance' %}" title="Cited by an open AML case" class="text-warning">⚑</a>{% endif %}</td>
+      </tr>
+    {% empty %}<tr><td colspan="9" class="px-4 py-8 text-center text-ink/40">No transactions match.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if older %}
+<p class="text-center mt-3"><a class="text-orange text-sm" href="?day={{ day|date:'Y-m-d' }}&status={{ status }}&type={{ type }}&q={{ q|urlencode }}{% if flagged %}&flagged=1{% endif %}&before={{ older|urlencode }}">Older →</a></p>
+{% endif %}
+<p class="text-xs text-ink/40 mt-4">Statuses: pending (waiting for the customer, an approver or the partner) · processing (with the partner) ·
+  completed · failed · cancelled (declined, expired or rejected) · reversed (refunded). Hover a status for the partner's own wording.
+  Times are Ghana time (GMT). People are masked; open their profile for details.</p>
+{% endblock %}

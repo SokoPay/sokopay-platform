@@ -41,6 +41,8 @@ DEFAULT_RULES: dict[str, tuple[int, int]] = {
     # actions (per user)
     "team_invite": (20, 60 * 60),
     "password_change": (10, 60 * 60),
+    "txn_export": (20, 60 * 60),
+    "ai_briefing": (4, 60 * 60),
     "bulk_upload": (20, 60 * 60),
     "api_key_create": (10, 60 * 60),
     "qr_request": (120, 60 * 60),

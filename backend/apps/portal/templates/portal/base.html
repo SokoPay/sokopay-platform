@@ -31,20 +31,31 @@
       <nav class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
         {% if staff == 'staff' %}
           <a href="{% url 'portal:admin_dashboard' %}" class="hover:text-orange">Overview</a>
+          {% if 'support' in staff_roles or 'operations' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:admin_users' %}" class="hover:text-orange">Users</a>{% endif %}
+          {% if staff_roles %}<a href="{% url 'portal:admin_transactions' %}" class="hover:text-orange">Transactions</a>{% endif %}
+          {% if 'finance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:admin_payments' %}" class="hover:text-orange">Payments</a>{% endif %}
+          {% if 'compliance' in staff_roles %}<a href="{% url 'portal:admin_risk' %}" class="hover:text-orange">Risk</a>{% endif %}
+          {% if 'compliance' in staff_roles or 'finance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:admin_insights' %}" class="hover:text-orange">Insights</a>{% endif %}
           <a href="{% url 'portal:merchant_queue' %}" class="hover:text-orange">Merchants</a>
-          <a href="{% url 'portal:settlement_queue' %}" class="hover:text-orange">Approvals</a>
-          <a href="{% url 'portal:safeguarding' %}" class="hover:text-orange">Safeguarding</a>
-          {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_agents' %}" class="hover:text-orange">Agents</a>
-          <a href="{% url 'portal:ops_disputes' %}" class="hover:text-orange">Disputes</a>{% endif %}
-          {% if 'compliance' in staff_roles %}<a href="{% url 'portal:compliance' %}" class="hover:text-orange">Compliance</a>
-          <a href="{% url 'portal:ops_kyc' %}" class="hover:text-orange">KYC</a>{% endif %}
-          {% if 'finance' in staff_roles %}<a href="{% url 'portal:ops_recon' %}" class="hover:text-orange">Recon</a>
-          <a href="{% url 'portal:ops_pricing' %}" class="hover:text-orange">Prices</a>{% endif %}
-          {% if 'finance' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:ops_regulatory' %}" class="hover:text-orange">Returns</a>{% endif %}
-          {% if 'support' in staff_roles or 'compliance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:ops_support' %}" class="hover:text-orange">Support</a>{% endif %}
-          <a href="{% url 'portal:integrations' %}" class="hover:text-orange">Integrations</a>
-          {% if staff_roles %}<a href="{% url 'portal:ops_health' %}" class="hover:text-orange">Health</a>{% endif %}
-          {% if 'compliance' in staff_roles or 'finance' in staff_roles %}<a href="{% url 'portal:ops_audit' %}" class="hover:text-orange">Audit</a>{% endif %}
+          {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_agents' %}" class="hover:text-orange">Agents</a>{% endif %}
+          <details class="relative">
+            <summary class="cursor-pointer list-none hover:text-orange">More ▾</summary>
+            <div class="absolute right-0 z-20 mt-2 w-52 bg-surface text-ink rounded-md shadow-lg py-1 text-sm">
+              <a href="{% url 'portal:settlement_queue' %}" class="block px-4 py-1.5 hover:bg-bg">Approvals</a>
+              <a href="{% url 'portal:safeguarding' %}" class="block px-4 py-1.5 hover:bg-bg">Safeguarding</a>
+              {% if 'operations' in staff_roles %}<a href="{% url 'portal:ops_disputes' %}" class="block px-4 py-1.5 hover:bg-bg">Disputes</a>
+              <a href="{% url 'portal:ops_float' %}" class="block px-4 py-1.5 hover:bg-bg">Float approvals</a>{% endif %}
+              {% if 'compliance' in staff_roles %}<a href="{% url 'portal:compliance' %}" class="block px-4 py-1.5 hover:bg-bg">AML cases</a>
+              <a href="{% url 'portal:ops_kyc' %}" class="block px-4 py-1.5 hover:bg-bg">KYC &amp; holds</a>{% endif %}
+              {% if 'finance' in staff_roles %}<a href="{% url 'portal:ops_recon' %}" class="block px-4 py-1.5 hover:bg-bg">Reconciliation</a>
+              <a href="{% url 'portal:ops_pricing' %}" class="block px-4 py-1.5 hover:bg-bg">Prices</a>{% endif %}
+              {% if 'finance' in staff_roles or 'compliance' in staff_roles %}<a href="{% url 'portal:ops_regulatory' %}" class="block px-4 py-1.5 hover:bg-bg">Regulatory returns</a>{% endif %}
+              {% if 'support' in staff_roles or 'compliance' in staff_roles or 'operations' in staff_roles %}<a href="{% url 'portal:ops_support' %}" class="block px-4 py-1.5 hover:bg-bg">Support lookup</a>{% endif %}
+              <a href="{% url 'portal:integrations' %}" class="block px-4 py-1.5 hover:bg-bg">Integrations</a>
+              {% if staff_roles %}<a href="{% url 'portal:ops_health' %}" class="block px-4 py-1.5 hover:bg-bg">System health</a>{% endif %}
+              {% if 'compliance' in staff_roles or 'finance' in staff_roles %}<a href="{% url 'portal:ops_audit' %}" class="block px-4 py-1.5 hover:bg-bg">Audit log</a>{% endif %}
+            </div>
+          </details>
         {% else %}
           <a href="{% url 'portal:dashboard' %}" class="hover:text-orange">Home</a>
           <a href="{% url 'portal:payments' %}" class="hover:text-orange">Payments</a>

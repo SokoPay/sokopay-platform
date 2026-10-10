@@ -1,0 +1,9 @@
+<div class="border border-gray-100 rounded-md p-3">
+  <p class="text-xs text-ink/50 mb-1">Q: {{ question|truncatechars:200 }}</p>
+  {% if error %}
+    <p class="text-danger">{{ error }}</p>
+  {% else %}
+    <div class="whitespace-pre-line leading-relaxed">{{ answer }}</div>
+    <p class="text-xs text-ink/40 mt-2">From: {{ tools|join:", "|default:"no data tools" }}{% if redactions %} · <span class="text-warning">removed before sending: {{ redactions|join:", " }}</span>{% endif %}</p>
+  {% endif %}
+</div>

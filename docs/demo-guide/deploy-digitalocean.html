@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet) (shared droplet) (shared droplet)</title><style>
+<!doctype html><html><head><meta charset='utf-8'><title>SokoPay: DigitalOcean deployment guide (shared droplet) (shared droplet) (shared droplet) (shared droplet) (shared droplet) (shared droplet)</title><style>
 @page { size: A4; margin: 16mm 15mm; }
 body { font-family: 'Segoe UI', Arial, sans-serif; color:#231F20; font-size:9.6pt; line-height:1.42; }
 h1 { font-size:19pt; border-bottom:3px solid #F26522; padding-bottom:2mm; }
@@ -511,11 +511,66 @@ PORTAL_2FA_SMS=True
 - <strong>Change password:</strong> on the <strong>Security</strong> page.
 - <strong>Expired invite:</strong> staff can click <strong>Resend invite</strong> on the merchant's review page, or the owner can on the <strong>Team</strong> page.</p>
 <p><strong>Documents</strong> are kept in the <code>media</code> Docker volume, encrypted with <code>FIELD_ENCRYPTION_KEY</code>. <code>scripts/backup.sh</code> backs them up next to the database (<code>*.media.tgz</code>), and <code>wipe.sh</code> deletes them with everything else.</p>
-<h3>12.5 USSD</h3>
+<h3>12.5 The admin command centre</h3>
+<p>Staff sign in at <code>/dashboard/</code>. The top menu shows only the sections their role allows:</p>
+<table>
+<thead>
+<tr>
+<th>Section</th>
+<th>Who</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Overview</strong></td>
+<td>All staff</td>
+<td>Live (refreshes every 15 s): total users, today's completed volume vs yesterday, in-progress and failed, 14-day trend, system alerts, compliance status (green / amber / red), queues waiting for a decision</td>
+</tr>
+<tr>
+<td><strong>Users</strong></td>
+<td>Support, operations, compliance</td>
+<td>Search by phone, name, email or wallet ID; filter by type, status, KYC tier. Phones are masked in the list; opening a profile is audit-logged. Actions: <strong>flag for review</strong> (opens an AML case), <strong>hold wallet</strong> (compliance), <strong>disable sign-in</strong> (compliance, operations; ends every session at once). Each needs a reason.</td>
+</tr>
+<tr>
+<td><strong>Transactions</strong></td>
+<td>Operations, finance, compliance, support</td>
+<td>Every money movement for a day in one list: completed / pending / processing / failed / cancelled / reversed, with amounts, fees and timestamps, and a ⚑ on anything cited by an AML case. Filter by status, type, reference. CSV export (finance, compliance): masked, audited, one day at a time.</td>
+</tr>
+<tr>
+<td><strong>Payments</strong></td>
+<td>Finance, operations</td>
+<td>Completed settlements, pending payouts (approval and with the partner), stuck payouts, refunds, the active payment partner and connected services, reconciliation runs and open breaks</td>
+</tr>
+<tr>
+<td><strong>Risk</strong></td>
+<td>Compliance</td>
+<td>Pending KYC (ID documents, merchant reviews), high-risk accounts (open high-severity cases, holds, high-risk merchants, sanctions/PEP matches), open AML alerts</td>
+</tr>
+<tr>
+<td><strong>Insights</strong></td>
+<td>Compliance, finance, operations</td>
+<td>Statistics computed on your own server (volume spikes, failure jumps, unusual sign-ups, fast-sending accounts, AML trends, backlogs, tomorrow's forecast), plus the optional AI</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Switching on the AI (optional).</strong> Add to <code>/sokopay/deploy/.env</code>, then run <code>docker compose up -d</code>:</p>
+<pre><code class="language-dotenv">AI_PROVIDER=anthropic
+ANTHROPIC_API_KEY=&lt;your key&gt;
+AI_CHAT_ENABLED=True
+</code></pre>
+<p>What protects customer data:
+- The AI can't query the database. It only gets totals from fixed reports, and groups smaller than 5 are hidden.
+- Anything that looks like a phone, ID, email, reference or account number is removed from questions, data and answers.
+- Only compliance, finance and operations staff can use it.
+- Each person is limited to 20 questions an hour, with a daily token budget across all staff.
+- Every use is listed in <strong>Insights → AI usage log</strong> and the audit log.</p>
+<p>A briefing is written every morning at 06:30. Before using it with real customers, note this external processing in your Data Protection Commission records.</p>
+<h3>12.6 USSD</h3>
 <pre><code class="language-bash">curl -s -X POST &quot;https://sokopay.theagbeko.com/api/v1/ussd/callback?key=&lt;USSD_SHARED_SECRET from .env&gt;&quot; \
   --data-urlencode sessionId=t1 --data-urlencode phoneNumber=+233244000201 --data-urlencode text=
 </code></pre>
-<h3>12.6 Following the demo guide</h3>
+<h3>12.7 Following the demo guide</h3>
 <p>Every walkthrough in <code>docs/SokoPay-Demo-Guide.pdf</code> works on the server with these changes:
 - Use <code>https://sokopay.theagbeko.com</code> instead of <code>http://127.0.0.1:8000</code>.
 - Use the logins from the credentials file.

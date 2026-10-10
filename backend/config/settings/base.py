@@ -80,6 +80,7 @@ LOCAL_APPS = [
     "apps.compliance",
     "apps.pricing",
     "apps.ussd",
+    "apps.insights",
     "apps.portal",
 ]
 
@@ -369,6 +370,10 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.accounts.tasks.purge_revoked_tokens",
         "schedule": crontab(hour=3, minute=30),
     },
+    "ai-daily-briefing": {                            # no-op unless AI_PROVIDER=anthropic
+        "task": "apps.insights.tasks.ai_daily_briefing",
+        "schedule": crontab(hour=6, minute=30),
+    },
 }
 
 # ---------------------------------------------------------------------------
@@ -451,3 +456,19 @@ PORTAL_2FA_SMS = env.bool("PORTAL_2FA_SMS", default=False)
 PORTAL_INVITE_TTL_HOURS = env.int("PORTAL_INVITE_TTL_HOURS", default=72)
 # Public merchant sign-up at /dashboard/register/ (applications wait for staff review).
 MERCHANT_SELF_SIGNUP = env.bool("MERCHANT_SELF_SIGNUP", default=True)
+
+
+# ---------------------------------------------------------------------------
+# AI insights (apps.insights.ai). OFF unless AI_PROVIDER=anthropic and a key is set.
+# The model only ever sees k-anonymised aggregates through fixed tools; everything sent
+# or received is redacted; every call is logged. See apps/insights/ai/gateway.py.
+# ---------------------------------------------------------------------------
+AI_PROVIDER = env("AI_PROVIDER", default="off")              # off | anthropic
+ANTHROPIC_API_KEY = env("ANTHROPIC_API_KEY", default="")
+AI_MODEL = env("AI_MODEL", default="claude-opus-5-5")
+AI_CHAT_ENABLED = env.bool("AI_CHAT_ENABLED", default=False)  # the "ask a question" box
+AI_ALLOWED_ROLES = env.list("AI_ALLOWED_ROLES", default=["compliance", "finance", "operations"])
+AI_CHAT_PER_HOUR = env.int("AI_CHAT_PER_HOUR", default=20)
+AI_DAILY_TOKEN_BUDGET = env.int("AI_DAILY_TOKEN_BUDGET", default=300_000)
+AI_MAX_TOKENS = env.int("AI_MAX_TOKENS", default=1500)
+AI_MAX_TOOL_ROUNDS = env.int("AI_MAX_TOOL_ROUNDS", default=5)
