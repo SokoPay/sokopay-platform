@@ -76,3 +76,6 @@ crash.log
 # Deployment artefacts
 deploy/backups/
 sokopay-deploy.tgz
+
+# Project documents stay on this computer (not published to GitHub)
+docs/
