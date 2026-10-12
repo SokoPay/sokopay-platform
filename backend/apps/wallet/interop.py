@@ -5,11 +5,12 @@ or other fintech wallet in Ghana.
 LICENCE (DEMI): wallet → wallet on/off-net needs WALLET_P2P; wallet → bank needs
 WALLET_BANK_TRANSFER.
 
-Money flow — reserve, send, then settle or refund:
-  1. reserve: Dr customer_wallet          Cr interop_in_flight   (committed before sending)
+Money flow — reserve, send, then settle or refund (fee = Fees & charges "transfer_momo" /
+"transfer_bank", the sender pays it on top):
+  1. reserve: Dr customer_wallet (amount + fee)   Cr interop_in_flight (amount + fee)
   2. send via the destination's connector (outside any DB transaction)
-  3a. success: Dr interop_in_flight       Cr partner_clearing:<route>
-  3b. failure: Dr interop_in_flight       Cr customer_wallet      (full refund)
+  3a. success: Dr interop_in_flight (amount + fee)  Cr partner_clearing:<route> (amount), fee_revenue (fee)
+  3b. failure: Dr interop_in_flight (amount + fee)  Cr customer_wallet (amount + fee: full refund)
   pending outcomes stay reserved until the poller (tasks.py) resolves them.
 
 Reserving first means a concurrent spend can't use the same money, and a crash between
@@ -113,11 +114,15 @@ def send_external(*, sender, destination: TransferDestination, amount_minor: int
     if lookup.supported and not lookup.found:
         raise TransferError("Recipient account not found.")
 
-    # 1. Reserve (committed before we call out).
+    # 1. Reserve amount + fee (committed before we call out).
+    from apps.pricing.services import fee as price_fee
+    fee_minor = price_fee("transfer_bank" if str(destination.type) == "bank" else "transfer_momo", amount_minor)
+    total = amount_minor + fee_minor
     with transaction.atomic():
-        if wallet.balance(sender, currency) < amount_minor:
-            raise TransferError("Insufficient wallet balance.")
-        kyc_limits.check_debit(sender, amount_minor)
+        if wallet.balance(sender, currency) < total:
+            raise TransferError("Insufficient wallet balance." if not fee_minor else
+                                f"Insufficient wallet balance for the amount plus the {ghs(fee_minor)} fee.")
+        kyc_limits.check_debit(sender, total)
         transfer = ExternalTransfer.objects.create(
             reference=new_reference(),
             sender=sender,
@@ -126,6 +131,7 @@ def send_external(*, sender, destination: TransferDestination, amount_minor: int
             account=destination.account,
             account_name=lookup.account_name,
             amount_minor=amount_minor,
+            fee_minor=fee_minor,
             currency=currency,
             narrative=narrative[:140],
             connector=conn.key,
@@ -133,8 +139,8 @@ def send_external(*, sender, destination: TransferDestination, amount_minor: int
         )
         post_entry(
             f"Transfer out {transfer.reference} (reserved)",
-            [debit(accounts.customer_wallet(str(sender.id), currency), amount_minor),
-             credit(accounts.interop_in_flight(currency), amount_minor)],
+            [debit(accounts.customer_wallet(str(sender.id), currency), total),
+             credit(accounts.interop_in_flight(currency), total)],
             idempotency_key=f"xfer-reserve:{transfer.id}",
             reference=("transfer", str(transfer.id)),
         )
@@ -171,9 +177,12 @@ def apply_outcome(transfer: ExternalTransfer, status: RailStatus,
         if status == RailStatus.SUCCEEDED:
             settle_key = getattr(settings, "RAIL_PROVIDER", "mock") if t.connector == "rail" else t.connector
             clearing = accounts.partner_clearing(settle_key, t.currency)
+            lines = [debit(in_flight, t.amount_minor + t.fee_minor), credit(clearing, t.amount_minor)]
+            if t.fee_minor:
+                lines.append(credit(accounts.fee_revenue(t.currency), t.fee_minor))      # earned on success
             post_entry(
                 f"Transfer out {t.reference} (settled)",
-                [debit(in_flight, t.amount_minor), credit(clearing, t.amount_minor)],
+                lines,
                 idempotency_key=f"xfer-settle:{t.id}",
                 reference=("transfer", str(t.id)),
                 allow_negative={clearing.code},
@@ -182,8 +191,8 @@ def apply_outcome(transfer: ExternalTransfer, status: RailStatus,
         elif status == RailStatus.FAILED:
             post_entry(
                 f"Transfer out {t.reference} (refunded)",
-                [debit(in_flight, t.amount_minor),
-                 credit(accounts.customer_wallet(str(t.sender_id), t.currency), t.amount_minor)],
+                [debit(in_flight, t.amount_minor + t.fee_minor),                # fee refunded too
+                 credit(accounts.customer_wallet(str(t.sender_id), t.currency), t.amount_minor + t.fee_minor)],
                 idempotency_key=f"xfer-refund:{t.id}",
                 reference=("transfer", str(t.id)),
             )

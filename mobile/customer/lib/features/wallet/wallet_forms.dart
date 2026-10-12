@@ -111,7 +111,10 @@ class _WalletSendScreenState extends State<WalletSendScreen> {
 
   Future<void> _submit() async {
     final api = context.read<ApiClient>();
-    final pin = await askPinFor(context, action: 'send GH₵ ${_amount.text.trim()} to ${_name ?? _phone.text.trim()}');
+    final quote = await FeeQuote.fetch(api, 'p2p', _amount.text.trim());
+    if (!mounted) return;
+    final pin = await askPinFor(context,
+        action: 'send GH₵ ${_amount.text.trim()} to ${_name ?? _phone.text.trim()}${quote?.text ?? ''}');
     if (pin == null || !mounted) return;
     setState(() { _busy = true; _error = null; });
     try {

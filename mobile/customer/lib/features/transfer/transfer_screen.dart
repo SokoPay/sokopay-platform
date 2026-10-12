@@ -69,7 +69,11 @@ class _TransferScreenState extends State<TransferScreen> {
   final _attempt = PaymentAttempt('xfer');
 
   Future<void> _send() async {
-    final pin = await askPinFor(context, action: 'send GH₵ ${_amount.text.trim()} to ${_check?.name ?? 'this account'}');
+    final quote = await FeeQuote.fetch(context.read<ApiClient>(),
+        _target.type == 'bank' ? 'transfer_bank' : 'transfer_momo', _amount.text.trim());
+    if (!mounted) return;
+    final pin = await askPinFor(context,
+        action: 'send GH₵ ${_amount.text.trim()} to ${_check?.name ?? 'this account'}${quote?.text ?? ''}');
     if (pin == null || !mounted) return;
     setState(() { _busy = true; _error = null; });
     try {

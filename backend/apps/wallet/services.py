@@ -188,15 +188,22 @@ def send_p2p(*, sender, recipient_phone: str, amount_minor: int, currency: str =
     if recipient is None:
         raise WalletError("No SokoPay account for that number. To pay a mobile money "
                           "wallet, use Send money instead.")
-    if balance(sender, currency) < amount_minor:
-        raise WalletError("Insufficient wallet balance.")
-    kyc_limits.check_debit(sender, amount_minor)
+    from apps.pricing.services import fee as price_fee
+    fee_minor = price_fee("p2p", amount_minor)                # the sender pays it on top
+    total = amount_minor + fee_minor
+    if balance(sender, currency) < total:
+        raise WalletError("Insufficient wallet balance." if not fee_minor else
+                          f"Insufficient wallet balance for {ghs(amount_minor)} plus the {ghs(fee_minor)} fee.")
+    kyc_limits.check_debit(sender, total)
     kyc_limits.check_credit(recipient, amount_minor, currency)
     sender_acc = accounts.customer_wallet(str(sender.id), currency)
     recipient_acc = accounts.customer_wallet(str(recipient.id), currency)
+    lines = [debit(sender_acc, total), credit(recipient_acc, amount_minor)]
+    if fee_minor:
+        lines.append(credit(accounts.fee_revenue(currency), fee_minor))
     post_entry(
         f"Transfer {sender.phone} → {recipient_phone}",
-        [debit(sender_acc, amount_minor), credit(recipient_acc, amount_minor)],
+        lines,
         reference=("p2p", str(sender.id)),
         idempotency_key=entry_key,
     )
@@ -204,4 +211,4 @@ def send_p2p(*, sender, recipient_phone: str, amount_minor: int, currency: str =
            body=f"{ghs(amount_minor)} from {display_name(sender)} is in your wallet.",
            data={"type": "wallet"}, app="customer")
     return {"recipient": recipient_phone, "recipient_name": display_name(recipient),
-            "amount_minor": amount_minor, "new_balance_minor": balance(sender, currency)}
+            "amount_minor": amount_minor, "fee_minor": fee_minor, "new_balance_minor": balance(sender, currency)}

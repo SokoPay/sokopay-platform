@@ -27,6 +27,7 @@ export 'src/security/app_lock.dart';
 export 'src/security/security_screen.dart';
 export 'src/security/pin_prompt.dart';
 export 'src/security/payment_attempt.dart';
+export 'src/security/fee_quote.dart';
 
 // Notification inbox (deep-link aware)
 export 'src/inbox/inbox_screen.dart';

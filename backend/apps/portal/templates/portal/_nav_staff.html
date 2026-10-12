@@ -16,7 +16,7 @@
 {% if 'finance' in staff_roles or 'operations' in staff_roles %}{% nav_link "portal:admin_payments" "Payments & settlement" %}{% endif %}
 {% nav_link "portal:settlement_queue" "Settlement approvals" %}
 {% if 'operations' in staff_roles %}{% nav_link "portal:ops_float" "Float approvals" %}{% nav_link "portal:ops_cashouts" "Cash-out monitor" %}{% endif %}
-{% if 'finance' in staff_roles %}{% nav_link "portal:ops_recon" "Reconciliation" %}{% nav_link "portal:ops_pricing" "Prices" %}{% endif %}
+{% if 'finance' in staff_roles %}{% nav_link "portal:ops_recon" "Reconciliation" %}{% nav_link "portal:ops_pricing" "Fees & charges" %}{% endif %}
 {% nav_link "portal:safeguarding" "Safeguarding" %}
 
 <div class="sp-group">Compliance &amp; risk</div>

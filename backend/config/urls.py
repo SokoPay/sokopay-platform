@@ -38,6 +38,7 @@ urlpatterns = [
     path("api/v1/", include("apps.notifications.urls")),
     path("api/v1/", include("apps.activity.urls")),
     path("api/v1/", include("apps.ussd.urls")),
+    path("api/v1/", include("apps.pricing.urls")),
     path("dashboard/", include("apps.portal.urls")),   # merchant + admin portals
     path("", include("apps.merchants.checkout_urls")),  # hosted checkout: /m/ /q/ /l/ /c/
 ]

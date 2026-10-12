@@ -1,7 +1,9 @@
 """
 Prices in force, maker-checker changes, and agent commissions.
 
-  fee(product, amount)          what SokoPay charges (rule in force, else DEFAULTS)
+  fee(product, amount)          what SokoPay charges (rule in force, else DEFAULTS), less any
+                                active approved promotion
+  quote(product, amount)        the same, itemised for the app: base fee, discount, promotion
   commission(product, amount)   what an agent earns
   propose(...) / decide(...)    a price change: one finance user proposes, ANOTHER approves;
                                 never retroactive (approval moves a past start to "now")
@@ -28,7 +30,7 @@ from apps.ledger import accounts
 from apps.ledger.services import credit, debit, post_entry
 from apps.common.audit import audited
 
-from .models import AgentCommission, PriceRule
+from .models import AgentCommission, PriceRule, Promotion
 
 MAX_PERCENT_BP = 1000          # 10%: a typo guard, not a business limit
 MAX_FLAT_MINOR = 100_00        # GH₵100
@@ -48,6 +50,9 @@ def _bulk_default(product: str, amount: int) -> int:
 
 # Code defaults (used until a rule is approved) — the prices the platform launched with.
 DEFAULTS = {
+    ("fee", "p2p"): lambda a: 0,                # free until finance sets a price
+    ("fee", "transfer_momo"): lambda a: 0,
+    ("fee", "transfer_bank"): lambda a: 0,
     ("fee", "bill"): lambda a: 50,              # GH₵0.50 flat [VERIFY]
     ("fee", "airtime"): lambda a: 0,
     ("fee", "data"): lambda a: 0,
@@ -57,7 +62,12 @@ DEFAULTS = {
     ("fee", "bulk_bank"): lambda a: _bulk_default("bulk_bank", a),
     ("commission", "cash_in"): lambda a: 0,     # [VERIFY] agent commission schedule
     ("commission", "cash_out"): lambda a: 0,
+    ("commission", "airtime"): lambda a: 0,     # agents selling airtime / data / bills for customers
+    ("commission", "data"): lambda a: 0,
+    ("commission", "bill"): lambda a: 0,
 }
+FEE_PRODUCTS = [p for k, p in DEFAULTS if k == "fee"]
+MAX_PROMOTION_DAYS = 366
 
 
 def rule_in_force(kind: str, product: str, at=None) -> PriceRule | None:
@@ -77,8 +87,24 @@ def _price(kind: str, product: str, amount_minor: int, at=None) -> tuple[int, Pr
     return (min(default(amount_minor), amount_minor) if default else 0), None
 
 
+def active_promotion(product: str, at=None) -> Promotion | None:
+    """The approved promotion giving the biggest discount on `product` right now (or None)."""
+    at = at or timezone.now()
+    return (Promotion.objects.filter(status=Promotion.Status.APPROVED, starts_at__lte=at, ends_at__gt=at,
+                                     product__in=(product, Promotion.ALL))
+            .order_by("-percent_off_bp", "ends_at").first())
+
+
+def quote(product: str, amount_minor: int, at=None) -> dict:
+    """Itemised fee: {"base", "discount", "fee", "promotion"} in pesewas (promotion = name or "")."""
+    base, _rule = _price("fee", product, amount_minor, at)
+    promo = active_promotion(product, at) if base else None
+    discount = promo.discount_on(base) if promo else 0
+    return {"base": base, "discount": discount, "fee": base - discount, "promotion": promo.name if promo else ""}
+
+
 def fee(product: str, amount_minor: int, at=None) -> int:
-    return _price("fee", product, amount_minor, at)[0]
+    return quote(product, amount_minor, at)["fee"]
 
 
 def commission(product: str, amount_minor: int, at=None) -> tuple[int, PriceRule | None]:
@@ -175,3 +201,67 @@ def pay_commissions() -> dict:
         paid_agents += 1
         total += amount
     return {"agents_paid": paid_agents, "total_minor": total}
+
+
+
+# --- promotions (time-limited discounts on fees, maker-checker) ------------------------------
+@audited("pricing.promotion_propose", actor="proposed_by", fields=("name", "product", "percent_off_bp", "note"))
+def propose_promotion(*, name: str, product: str, percent_off_bp: int, starts_at, ends_at, note: str,
+                      proposed_by) -> Promotion:
+    name, note = (name or "").strip(), (note or "").strip()
+    if not 3 <= len(name) <= 80:
+        raise PricingError("Give the discount a short name customers will see (3–80 characters).")
+    if product != Promotion.ALL and product not in FEE_PRODUCTS:
+        raise PricingError("Choose a fee, or every fee.")
+    if not isinstance(percent_off_bp, int) or not 100 <= percent_off_bp <= 10_000:
+        raise PricingError("The discount must be between 1% and 100% (free).")
+    if len(note) < 5:
+        raise PricingError("Say why (kept on the audit trail).")
+    now = timezone.now()
+    if starts_at is None or ends_at is None:
+        raise PricingError("Set when the discount starts and ends.")
+    if ends_at <= starts_at:
+        raise PricingError("The end must be after the start.")
+    if ends_at <= now:
+        raise PricingError("That period is already over.")
+    if (ends_at - starts_at).days > MAX_PROMOTION_DAYS:
+        raise PricingError("A discount can run for at most a year. Use a price change for longer.")
+    return Promotion.objects.create(name=name, product=product, percent_off_bp=percent_off_bp,
+                                    starts_at=max(starts_at, now - timedelta(minutes=1)), ends_at=ends_at,
+                                    note=note[:255], proposed_by=proposed_by)
+
+
+@audited("pricing.promotion_decide", actor="approver", fields=("approve",))
+def decide_promotion(promo: Promotion, *, approver, approve: bool) -> Promotion:
+    with transaction.atomic():
+        p = Promotion.objects.select_for_update().get(pk=promo.pk)
+        if p.status != Promotion.Status.PENDING:
+            raise PricingError("This discount has already been decided.")
+        if approver.id == p.proposed_by_id:
+            raise PricingError("A different person must approve a discount.")
+        now = timezone.now()
+        if approve and p.ends_at <= now:
+            raise PricingError("This discount's period is already over. Propose a new one.")
+        p.status = Promotion.Status.APPROVED if approve else Promotion.Status.REJECTED
+        if approve and p.starts_at < now:
+            p.starts_at = now                          # never retroactive
+        p.decided_by, p.decided_at = approver, now
+        p.save(update_fields=["status", "starts_at", "decided_by", "decided_at", "updated_at"])
+    return p
+
+
+@audited("pricing.promotion_end", actor="actor", fields=("reason",))
+def end_promotion(promo: Promotion, *, actor, reason: str) -> Promotion:
+    reason = (reason or "").strip()
+    if len(reason) < 5:
+        raise PricingError("Say why the discount is ending early.")
+    with transaction.atomic():
+        p = Promotion.objects.select_for_update().get(pk=promo.pk)
+        now = timezone.now()
+        if p.status != Promotion.Status.APPROVED or p.ends_at <= now:
+            raise PricingError("Only a running or upcoming approved discount can be ended.")
+        p.status = Promotion.Status.ENDED
+        p.ends_at = max(now, p.starts_at)
+        p.ended_by, p.ended_reason = actor, reason[:255]
+        p.save(update_fields=["status", "ends_at", "ended_by", "ended_reason", "updated_at"])
+    return p

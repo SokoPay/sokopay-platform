@@ -54,6 +54,7 @@ def _transfer_json(t: ExternalTransfer) -> dict:
         "account": t.account,
         "account_name": t.account_name,
         "amount": Money(t.amount_minor, t.currency).format(),
+        "fee": Money(t.fee_minor, t.currency).format(),
         "status": t.status,
         "failure_code": t.failure_code,
         "created_at": t.created_at,
@@ -147,6 +148,7 @@ class WalletSendView(APIView):
             "recipient": result["recipient"],
             "recipient_name": result["recipient_name"],
             "amount": Money(result["amount_minor"], "GHS").format(),
+            "fee": Money(result.get("fee_minor", 0), "GHS").format(),
             "new_balance": Money(result["new_balance_minor"], "GHS").format(),
         })
 

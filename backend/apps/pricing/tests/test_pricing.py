@@ -85,7 +85,7 @@ def test_typo_guards(finance):
         with pytest.raises(pricing.PricingError):
             pricing.propose(kind="fee", product="bill", note="typo test", proposed_by=finance[0], **kw)
     with pytest.raises(pricing.PricingError):
-        pricing.propose(kind="commission", product="bill", note="not priced", proposed_by=finance[0])
+        pricing.propose(kind="commission", product="bulk_momo", note="not priced", proposed_by=finance[0])
 
 
 def test_bulk_fee_uses_rules(finance):

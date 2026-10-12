@@ -321,56 +321,124 @@ def regulatory_return(request):
                   {"report": report, "rows": regulatory.flatten(report), "month": report["period"]})
 
 
-# --- prices: fees and agent commissions (finance, maker-checker) --------------------------------
+# --- fees & charges: what SokoPay charges, agent commissions, discounts (finance, maker-checker) ---
+GROUPS = (
+    ("Customer fees", "fee", ("p2p", "transfer_momo", "transfer_bank", "bill", "airtime", "data", "cash_out",
+                              "cash_in")),
+    ("Merchant fees", "fee", ("bulk_momo", "bulk_bank")),
+    ("Agent commissions (SokoPay pays the agent)", "commission", ("cash_in", "cash_out", "airtime", "data", "bill")),
+)
+
+
+def _price_type(rule) -> str:
+    if rule is None:
+        return "Launch default"
+    if not (rule.flat_minor or rule.percent_bp):
+        return "Free"
+    if rule.percent_bp and not rule.flat_minor:
+        return "Percentage, capped" if rule.max_minor else "Percentage"
+    if rule.flat_minor and not rule.percent_bp:
+        return "Flat"
+    return "Flat + percentage"
+
+
+def _minor_field(request, name) -> int:
+    raw = (request.POST.get(name) or "").strip()
+    return Money.from_major(raw, "GHS").minor if raw else 0
+
+
+def _when(request, name):
+    from datetime import datetime
+    raw = (request.POST.get(name) or "").strip()
+    return timezone.make_aware(datetime.fromisoformat(raw)) if raw else None
+
+
 @staff_role_required("finance")
 def pricing(request):
     from apps.pricing import services as pricing_services
-    from apps.pricing.models import PriceRule
+    from apps.pricing.models import PriceRule, Promotion
     if request.method == "POST":
+        action = request.POST.get("action")
         try:
-            if request.POST.get("action") == "propose":
-                def minor(name):
-                    raw = (request.POST.get(name) or "").strip()
-                    return Money.from_major(raw, "GHS").minor if raw else 0
-                start = request.POST.get("effective_from") or ""
-                effective = None
-                if start:
-                    from datetime import datetime
-                    effective = timezone.make_aware(datetime.fromisoformat(start))
+            if action == "propose":
                 kind, product = (request.POST.get("key") or ":").split(":", 1)
-                pricing_services.propose(
-                    kind=kind, product=product, flat_minor=minor("flat"),
-                    percent_bp=int(round(float(request.POST.get("percent") or 0) * 100)),
-                    min_minor=minor("min"), max_minor=minor("max"), effective_from=effective,
-                    note=request.POST.get("note", ""), proposed_by=request.user)
+                ptype = request.POST.get("ptype", "custom")
+                flat, percent, lo, hi = (_minor_field(request, "flat"),
+                                         int(round(float(request.POST.get("percent") or 0) * 100)),
+                                         _minor_field(request, "min"), _minor_field(request, "max"))
+                if ptype == "free":
+                    flat = percent = lo = hi = 0
+                elif ptype == "flat":
+                    percent, lo, hi = 0, 0, 0
+                elif ptype == "percent":
+                    flat = 0
+                pricing_services.propose(kind=kind, product=product, flat_minor=flat, percent_bp=percent,
+                                         min_minor=lo, max_minor=hi, effective_from=_when(request, "effective_from"),
+                                         note=request.POST.get("note", ""), proposed_by=request.user)
                 messages.success(request, "Price change proposed. Another finance user must approve it.")
-            else:
+            elif action in ("approve", "reject"):
                 rule = get_object_or_404(PriceRule, pk=request.POST.get("rule"))
-                pricing_services.decide(rule, approver=request.user, approve=request.POST.get("action") == "approve")
+                pricing_services.decide(rule, approver=request.user, approve=action == "approve")
                 messages.success(request, "Decision recorded.")
+            elif action == "promo_propose":
+                free = request.POST.get("promo_type") == "free"
+                pct = 10_000 if free else int(round(float(request.POST.get("percent_off") or 0) * 100))
+                pricing_services.propose_promotion(
+                    name=request.POST.get("name", ""), product=request.POST.get("product", ""), percent_off_bp=pct,
+                    starts_at=_when(request, "starts_at") or timezone.now(), ends_at=_when(request, "ends_at"),
+                    note=request.POST.get("note", ""), proposed_by=request.user)
+                messages.success(request, "Discount proposed. Another finance user must approve it.")
+            elif action in ("promo_approve", "promo_reject"):
+                promo = get_object_or_404(Promotion, pk=request.POST.get("promo"))
+                pricing_services.decide_promotion(promo, approver=request.user, approve=action == "promo_approve")
+                messages.success(request, "Decision recorded.")
+            elif action == "promo_end":
+                promo = get_object_or_404(Promotion, pk=request.POST.get("promo"))
+                pricing_services.end_promotion(promo, actor=request.user, reason=request.POST.get("reason", ""))
+                messages.success(request, "Discount ended.")
         except (pricing_services.PricingError, MoneyError, ValueError, OverflowError) as exc:
             messages.error(request, str(exc) or "Check the numbers.")
         return redirect("portal:ops_pricing")
-    current = []
-    for kind, product in pricing_services.DEFAULTS:
-        rule = pricing_services.rule_in_force(kind, product)
-        example = 100_00
-        current.append({
-            "key": f"{kind}:{product}", "kind": PriceRule.Kind(kind).label,
-            "product": PriceRule.Product(product).label,
-            "rule": rule, "describe": rule.describe() if rule else "launch default",
-            "example": _ghs(pricing_services._price(kind, product, example)[0]),
-        })
+
+    groups = []
+    for title, kind, products in GROUPS:
+        rows = []
+        for product in products:
+            if (kind, product) not in pricing_services.DEFAULTS:
+                continue
+            rule = pricing_services.rule_in_force(kind, product)
+            examples = []
+            for amount in (100_00, 1_000_00):
+                if kind == "fee":
+                    q = pricing_services.quote(product, amount)
+                    examples.append((_ghs(q["base"]), _ghs(q["fee"]) if q["discount"] else ""))
+                else:
+                    examples.append((_ghs(pricing_services.commission(product, amount)[0]), ""))
+            upcoming = (PriceRule.objects.filter(kind=kind, product=product, status="approved",
+                                                 effective_from__gt=timezone.now()).order_by("effective_from").first())
+            rows.append({
+                "key": f"{kind}:{product}", "label": PriceRule.Product(product).label, "rule": rule,
+                "type": _price_type(rule), "describe": rule.describe() if rule else "launch default",
+                "examples": examples, "upcoming": upcoming,
+                "promotion": pricing_services.active_promotion(product) if kind == "fee" else None,
+            })
+        groups.append({"title": title, "kind": kind, "rows": rows})
+    now = timezone.now()
+    promos = Promotion.objects.select_related("proposed_by", "decided_by")
     return render(request, "portal/admin/ops_pricing.html", {
-        "current": current,
+        "groups": groups,
+        "fee_products": [(p, PriceRule.Product(p).label.split(" (")[0]) for p in pricing_services.FEE_PRODUCTS],
         "pending": PriceRule.objects.filter(status="pending").select_related("proposed_by").order_by("created_at"),
         "history": PriceRule.objects.exclude(status="pending").select_related("proposed_by", "decided_by")
         .order_by("-decided_at")[:40],
+        "promo_running": promos.filter(status="approved", starts_at__lte=now, ends_at__gt=now).order_by("ends_at"),
+        "promo_scheduled": promos.filter(status="approved", starts_at__gt=now).order_by("starts_at"),
+        "promo_pending": promos.filter(status="pending").order_by("created_at"),
+        "promo_history": sorted([*promos.filter(status__in=("rejected", "ended")).order_by("-updated_at")[:20],
+                                 *promos.filter(status="approved", ends_at__lte=now).order_by("-ends_at")[:20]],
+                                key=lambda p: p.updated_at, reverse=True),
     })
 
-
-
-# --- savings / investment withdrawals waiting for the provider (operations) ---------------------
 @staff_role_required("operations", "finance")
 def product_withdrawals(request):
     from apps.marketplace import services as mkt

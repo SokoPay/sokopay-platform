@@ -24,6 +24,7 @@ class ExternalTransfer(TimeStampedModel):
     account = models.CharField(max_length=34)                # phone or account number
     account_name = models.CharField(max_length=128, blank=True)  # from name enquiry
     amount_minor = models.BigIntegerField()
+    fee_minor = models.BigIntegerField(default=0)            # held with the amount; earned only on success
     currency = models.CharField(max_length=3, default="GHS")
     narrative = models.CharField(max_length=140, blank=True)
 
