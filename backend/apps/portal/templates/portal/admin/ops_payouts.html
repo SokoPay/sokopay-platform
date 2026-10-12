@@ -1,0 +1,35 @@
+{% extends "portal/base.html" %}
+{% load money_tags %}
+{% block title %}Commission payouts · SokoPay{% endblock %}
+{% block content %}
+<h1 class="text-xl font-semibold mb-1">Commission payouts</h1>
+<p class="text-sm text-ink/60 mb-4">Cash-out commission is paid into agents' floats every {{ interval }} days. One finance user prepares the payout, a different one approves it. Suspended agents are skipped and their commission waits for the next payout. Cash-in and sales commission isn't paid here — agents redeem it into their float from the app.</p>
+<div class="grid sm:grid-cols-3 gap-3 mb-6">
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Unpaid cash-out commission</div><div class="text-lg font-semibold tabular-nums">{{ unpaid_total|ghs }}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4"><div class="text-xs text-ink/50">Next payout due</div><div class="text-lg font-semibold">{% if next_due %}{{ next_due|date:"d M Y" }}{% else %}Now (no payout yet){% endif %}</div></div>
+  <div class="bg-surface rounded-lg shadow-sm p-4 flex items-center">{% if pending %}<span class="text-sm text-ink/60">A payout is waiting for approval below.</span>{% else %}
+    <form method="post">{% csrf_token %}<input type="hidden" name="action" value="prepare"><button class="bg-primary text-white rounded-md px-4 py-2" {% if not unpaid_total %}disabled{% endif %}>Prepare payout</button></form>{% endif %}</div>
+</div>
+
+{% if pending %}
+<h2 class="font-medium mb-2">Waiting for approval</h2>
+<div class="bg-surface rounded-lg shadow-sm p-4 mb-6">
+  <p class="text-sm mb-3">{{ pending.total_minor|ghs }} to {{ pending.agent_count }} agent(s), commission up to {{ pending.period_end|date:"d M Y H:i" }}. Prepared by {{ pending.prepared_by.full_name }} on {{ pending.created_at|date:"d M H:i" }}.</p>
+  <table class="w-full text-sm mb-3"><thead class="text-ink/50 text-left"><tr><th class="py-1">Agent</th><th>Status</th><th class="text-right">Transactions</th><th class="text-right">Amount</th></tr></thead><tbody>
+  {% for r in pending_rows %}<tr class="border-t border-gray-50"><td class="py-1">{{ r.agent__display_name }}</td><td>{% if r.agent__status != "active" %}<span class="text-danger">{{ r.agent__status }} — will be held</span>{% else %}active{% endif %}</td><td class="text-right">{{ r.n }}</td><td class="text-right tabular-nums">{{ r.total|ghs }}</td></tr>{% endfor %}</tbody></table>
+  <form method="post" class="flex gap-2">{% csrf_token %}<input type="hidden" name="payout" value="{{ pending.pk }}">
+    <button name="decision" value="approve" class="bg-success text-white rounded-md px-4 py-1.5">Approve and pay</button>
+    <button name="decision" value="reject" class="border border-danger text-danger rounded-md px-4 py-1.5">Reject</button></form>
+</div>
+{% else %}
+<h2 class="font-medium mb-2">Unpaid cash-out commission by agent</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto mb-6"><table class="w-full text-sm"><thead class="text-ink/50 text-left"><tr><th class="px-4 py-2">Agent</th><th>Status</th><th class="text-right">Transactions</th><th class="text-right px-4">Amount</th></tr></thead><tbody>
+{% for r in by_agent %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ r.agent__display_name }}</td><td>{{ r.agent__status }}</td><td class="text-right">{{ r.n }}</td><td class="text-right px-4 tabular-nums">{{ r.total|ghs }}</td></tr>
+{% empty %}<tr><td colspan="4" class="px-4 py-6 text-center text-ink/40">Nothing unpaid.</td></tr>{% endfor %}</tbody></table></div>
+{% endif %}
+
+<h2 class="font-medium mb-2">Past payouts</h2>
+<div class="bg-surface rounded-lg shadow-sm overflow-x-auto"><table class="w-full text-sm"><tbody>
+{% for p in history %}<tr class="border-t border-gray-50"><td class="px-4 py-2">{{ p.decided_at|date:"d M Y H:i" }}</td><td>{{ p.get_status_display }}</td><td class="tabular-nums">{{ p.total_minor|ghs }}</td><td>{{ p.agent_count }} agent(s)</td><td class="text-xs text-ink/50">{{ p.prepared_by.full_name }} → {{ p.decided_by.full_name }}</td></tr>
+{% empty %}<tr><td class="px-4 py-4 text-ink/40">None yet.</td></tr>{% endfor %}</tbody></table></div>
+{% endblock %}

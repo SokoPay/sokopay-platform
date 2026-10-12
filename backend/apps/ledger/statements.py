@@ -121,6 +121,15 @@ def merchant_statement(merchant, s: dt.date, e: dt.date) -> dict:
     return st
 
 
+def agent_statement(agent, s: dt.date, e: dt.date) -> dict:
+    """The agent's float: cash-in, cash-out, sales, top-ups, earnings paid in, day by day."""
+    acc = LedgerAccount.objects.filter(code=f"agent_float:{agent.id}").first()
+    st = _payment_refs(account_statement(acc, s, e))
+    st["holder"] = {"name": agent.display_name, "phone": agent.user.phone,
+                    "account": f"SokoPay agent float · {agent.location or ''}".strip(" ·")}
+    return st
+
+
 # --- rendering ------------------------------------------------------------------------------
 def _m(minor: int) -> str:
     return Money(int(minor), "GHS").format()

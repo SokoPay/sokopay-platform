@@ -388,7 +388,20 @@ def decide_float_topup(topup: FloatTopUp, *, approver, approve: bool, note: str 
             topup.status = FloatTopUp.Status.REJECTED
         topup.decided_by, topup.decided_at, topup.note = approver, tz.now(), (note or "")[:255]
         topup.save(update_fields=["status", "decided_by", "decided_at", "note", "updated_at"])
+        if topup.channel == FloatTopUp.Channel.AGENT:
+            transaction.on_commit(lambda: _tell_agent_about_deposit(topup))
     return topup
+
+
+def _tell_agent_about_deposit(topup: FloatTopUp) -> None:
+    from apps.notifications.services import ghs, notify
+    if topup.status == FloatTopUp.Status.APPROVED:
+        title, body = "Float added", f"Your bank deposit of {ghs(topup.amount_minor)} ({topup.payment_reference}) is now in your float."
+    else:
+        title = "Deposit not approved"
+        body = (f"Your bank deposit of {ghs(topup.amount_minor)} ({topup.payment_reference}) wasn't approved."
+                + (f" Reason: {topup.note}" if topup.note else " Contact SokoPay."))
+    notify(topup.agent.user, kind="payment", title=title, body=body, app="agent", data={"type": "float"})
 
 
 # --- helpers ----------------------------------------------------------------

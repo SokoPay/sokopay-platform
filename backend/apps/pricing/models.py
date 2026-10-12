@@ -88,8 +88,42 @@ class PriceRule(TimeStampedModel):
         return text
 
 
+class CommissionPayout(TimeStampedModel):
+    """
+    A fortnightly payout of agents' cash-out commission into their float. One finance user
+    prepares it (snapshotting every unpaid cash-out commission up to `period_end`), a
+    DIFFERENT one approves it; only then is any money moved.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Awaiting approval"
+        PAID = "paid", "Paid"
+        REJECTED = "rejected", "Rejected"
+
+    period_end = models.DateTimeField()
+    total_minor = models.BigIntegerField(default=0)
+    agent_count = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    prepared_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
+    decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name="+")
+    decided_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = "pricing_commission_payout"
+        ordering = ("-created_at",)
+
+
 class AgentCommission(TimeStampedModel):
-    """Commission earned by an agent on one cash-in / cash-out (accrued in the ledger)."""
+    """
+    Commission earned by an agent on one transaction (accrued in the ledger). Cash-in and
+    sales commission can be redeemed into the float at any time; cash-out commission is
+    paid by SokoPay every two weeks (CommissionPayout).
+    """
+
+    class Settled(models.TextChoices):
+        REDEEMED = "redeemed", "Redeemed by the agent"
+        PAYOUT = "payout", "Fortnightly payout"
 
     agent = models.ForeignKey("agents.Agent", on_delete=models.PROTECT, related_name="commissions")
     txn = models.OneToOneField("agents.AgentTxn", on_delete=models.PROTECT, related_name="commission")
@@ -97,6 +131,9 @@ class AgentCommission(TimeStampedModel):
     amount_minor = models.BigIntegerField()
     rule = models.ForeignKey(PriceRule, on_delete=models.PROTECT, null=True, blank=True)
     paid_at = models.DateTimeField(null=True, blank=True)
+    settled_via = models.CharField(max_length=10, choices=Settled.choices, blank=True)
+    payout = models.ForeignKey(CommissionPayout, on_delete=models.PROTECT, null=True, blank=True,
+                               related_name="commissions")
 
     class Meta:
         db_table = "pricing_agent_commission"

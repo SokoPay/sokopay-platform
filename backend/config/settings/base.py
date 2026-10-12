@@ -334,10 +334,6 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.common.tasks.ops_snapshot",
         "schedule": crontab(minute="*/5"),
     },
-    "pay-agent-commissions": {
-        "task": "apps.pricing.tasks.pay_agent_commissions",
-        "schedule": crontab(day_of_month="1", hour="2", minute="0"),   # monthly, for last month
-    },
     "poll-lifestyle-orders": {
         "task": "apps.wallet.tasks.poll_lifestyle_orders",
         "schedule": crontab(minute="*/5"),

@@ -3,7 +3,9 @@ Back-office operations pages (role-gated):
 
   operations   /dashboard/admin/agents/            agents: register, activate, suspend
                /dashboard/admin/agents/<id>/        one agent: float, history, top-up request
-               /dashboard/admin/float-topups/       maker-checker approvals (operations/finance)
+               /dashboard/admin/float-topups/       maker-checker approvals (operations/finance), incl.
+                                                    agents' bank deposits + slips; SokoPay deposit accounts
+  finance      /dashboard/admin/commission-payouts/ fortnightly cash-out commission payouts (two people)
                /dashboard/admin/cash-outs/          cash-out request monitor
   compliance   /dashboard/admin/kyc/                tiers, held wallets, manual holds
   finance      /dashboard/admin/reconciliation/     runs and breaks; resolve with a note
@@ -16,14 +18,14 @@ from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 
 from apps.common.audit import record as audit
 from apps.agents import services as agents
 from apps.agents.exceptions import AgentError
-from apps.agents.models import Agent, CashOutRequest, FloatTopUp
+from apps.agents.models import Agent, CashOutRequest, DepositAccount, FloatTopUp
 from apps.common.money import Money, MoneyError
 from apps.licensing.exceptions import CapabilityNotLicensed
 
@@ -100,8 +102,13 @@ def agent_detail(request, pk):
         except CapabilityNotLicensed:
             messages.error(request, "Agent operations need the DEMI licence.")
         return redirect("portal:ops_agent", pk=agent.pk)
+    from apps.pricing.services import earnings
+    e = earnings(agent)
     return render(request, "portal/admin/ops_agent.html", {
         "a": agent, "float": _ghs(agents.float_balance(agent)), "ghs": _ghs,
+        "earn": {"redeemable": _ghs(e["redeemable_minor"]), "awaiting": _ghs(e["awaiting_payout_minor"]),
+                 "paid": _ghs(e["paid_minor"])},
+        "commissions": agent.commissions.select_related("txn").order_by("-created_at")[:20],
         "txns": agent.transactions.order_by("-created_at")[:30],
         "topups": agent.float_topups.select_related("requested_by", "decided_by").order_by("-created_at")[:20],
         "cashouts": agent.cash_out_requests.order_by("-created_at")[:20],
@@ -110,6 +117,8 @@ def agent_detail(request, pk):
 
 @staff_role_required("operations", "finance")
 def float_topups(request):
+    if request.method == "POST" and request.POST.get("action") in ("add_account", "toggle_account"):
+        return _deposit_account_action(request)
     if request.method == "POST":
         t = get_object_or_404(FloatTopUp, pk=request.POST.get("topup"))
         try:
@@ -122,10 +131,93 @@ def float_topups(request):
             messages.error(request, "Float top-ups need the DEMI licence.")
         return redirect("portal:ops_float")
     return render(request, "portal/admin/ops_float.html", {
-        "pending": FloatTopUp.objects.filter(status="pending").select_related("agent", "requested_by"),
-        "recent": FloatTopUp.objects.exclude(status="pending").select_related("agent", "requested_by", "decided_by")
-        .order_by("-decided_at")[:30],
+        "pending": FloatTopUp.objects.filter(status="pending").select_related("agent", "requested_by", "deposit_account"),
+        "recent": FloatTopUp.objects.exclude(status="pending")
+        .select_related("agent", "requested_by", "decided_by", "deposit_account").order_by("-decided_at")[:30],
+        "accounts": DepositAccount.objects.order_by("-is_active", "bank_name"),
         "ghs": _ghs,
+    })
+
+
+def _deposit_account_action(request):
+    """The SokoPay bank accounts agents pay cash into (shown in the Agent app). Audited."""
+    if request.POST["action"] == "add_account":
+        fields = {k: request.POST.get(k, "").strip() for k in ("bank_name", "account_name", "account_number", "branch")}
+        if not (fields["bank_name"] and fields["account_name"] and fields["account_number"]):
+            messages.error(request, "Enter the bank, account name and account number.")
+        else:
+            acc = DepositAccount.objects.create(**fields)
+            audit("float.deposit_account_add", actor=request.user, obj=acc, bank=acc.bank_name)
+            messages.success(request, f"{acc.bank_name} account added. Agents can now pay into it.")
+    else:
+        acc = get_object_or_404(DepositAccount, pk=request.POST.get("account"))
+        acc.is_active = not acc.is_active
+        acc.save(update_fields=["is_active", "updated_at"])
+        audit("float.deposit_account_" + ("enable" if acc.is_active else "disable"), actor=request.user, obj=acc)
+        messages.success(request, f"{acc.bank_name} {acc.account_number} {'shown to' if acc.is_active else 'hidden from'} agents.")
+    return redirect("portal:ops_float")
+
+
+@staff_role_required("operations", "finance")
+def float_slip(request, pk):
+    """An agent's deposit-slip photo, decrypted, never cached. Each view is audit-logged."""
+    from django.http import Http404, HttpResponse
+
+    from apps.common import secure_files
+    t = get_object_or_404(FloatTopUp, pk=pk)
+    if not t.slip_key:
+        raise Http404("No slip was uploaded.")
+    try:
+        data, content_type, _ = secure_files.read(t.slip_key)
+    except FileNotFoundError:
+        raise Http404("This slip's file isn't available.") from None
+    audit("float.slip_view", actor=request.user, obj=t)
+    resp = HttpResponse(data, content_type=content_type)
+    resp["Cache-Control"] = "no-store"
+    resp["X-Content-Type-Options"] = "nosniff"
+    resp["Content-Disposition"] = "inline"
+    return resp
+
+
+@staff_role_required("finance")
+def commission_payouts(request):
+    """
+    Cash-out commission is paid every two weeks: one finance user prepares the payout (every
+    unpaid cash-out commission so far), a different one approves it and each active agent's
+    float is credited. Cash-in and sales commission isn't here: agents redeem it themselves.
+    """
+    from apps.pricing import services as pricing
+    from apps.pricing.models import AgentCommission, CommissionPayout
+    if request.method == "POST":
+        try:
+            if request.POST.get("action") == "prepare":
+                p = pricing.prepare_payout(prepared_by=request.user)
+                messages.success(request, f"Payout of {_ghs(p.total_minor)} to {p.agent_count} agent(s) prepared. "
+                                          "A different finance user must approve it.")
+            else:
+                p = get_object_or_404(CommissionPayout, pk=request.POST.get("payout"))
+                p = pricing.decide_payout(p, approver=request.user, approve=request.POST.get("decision") == "approve")
+                messages.success(request, f"Paid {_ghs(p.total_minor)} into agents' floats." if p.status == "paid"
+                                 else "Payout rejected. The commission stays unpaid for the next one.")
+        except pricing.PricingError as exc:
+            messages.error(request, str(exc))
+        return redirect("portal:ops_payouts")
+    unpaid = AgentCommission.objects.filter(paid_at=None, payout=None, product__in=pricing.PAYOUT_PRODUCTS)
+    by_agent = (unpaid.values("agent__display_name", "agent__status")
+                .annotate(n=Count("id"), total=Sum("amount_minor")).order_by("-total")[:100])
+    last = CommissionPayout.objects.filter(status="paid").order_by("-decided_at").first()
+    pending = CommissionPayout.objects.filter(status="pending").select_related("prepared_by").first()
+    pending_rows = []
+    if pending:
+        pending_rows = (pending.commissions.values("agent__display_name", "agent__status")
+                        .annotate(n=Count("id"), total=Sum("amount_minor")).order_by("-total"))
+    return render(request, "portal/admin/ops_payouts.html", {
+        "by_agent": by_agent, "unpaid_total": unpaid.aggregate(s=Sum("amount_minor"))["s"] or 0,
+        "pending": pending, "pending_rows": pending_rows,
+        "next_due": (last.decided_at + timedelta(days=pricing.PAYOUT_INTERVAL_DAYS)) if last else None,
+        "history": CommissionPayout.objects.exclude(status="pending")
+        .select_related("prepared_by", "decided_by").order_by("-created_at")[:20],
+        "ghs": _ghs, "interval": pricing.PAYOUT_INTERVAL_DAYS,
     })
 
 

@@ -148,6 +148,11 @@ def _initiate(*, purpose, user, biller, account_ref, amount_minor, network, paye
     require_capability(_PURPOSE_CAPABILITY[purpose])
     if source == Payment.Source.WALLET:
         require_capability(Capability.HOLD_CUSTOMER_FUNDS)   # paying from e-money is DEMI
+    elif source == Payment.Source.AGENT_FLOAT:
+        require_capability(Capability.AGENT_NETWORK)         # an agent paying from their float
+        agent = getattr(user, "agent_profile", None)
+        if agent is None or agent.status != "active":
+            raise PaymentError("Only an active agent can pay from a float.")
     elif not (network and payer):
         raise PaymentError("Choose a mobile money network and number to pay from.")
 
@@ -176,6 +181,12 @@ def _initiate(*, purpose, user, biller, account_ref, amount_minor, network, paye
 
     if source == Payment.Source.WALLET:
         return _pay_from_wallet(
+            purpose=purpose, user=user, biller=biller, account_ref=account_ref,
+            amount_minor=amount_minor, fee=fee, total=total, currency=currency,
+            mode=mode, idempotency_key=idempotency_key, product_code=product_code,
+        )
+    if source == Payment.Source.AGENT_FLOAT:
+        return _pay_from_agent_float(
             purpose=purpose, user=user, biller=biller, account_ref=account_ref,
             amount_minor=amount_minor, fee=fee, total=total, currency=currency,
             mode=mode, idempotency_key=idempotency_key, product_code=product_code,
@@ -221,6 +232,32 @@ def _initiate(*, purpose, user, biller, account_ref, amount_minor, network, paye
         payment.status = Payment.Status.PENDING
     payment.save(update_fields=["rail_ref", "status", "failure_code", "completed_at", "updated_at"])
     return payment
+
+
+def _pay_from_agent_float(*, purpose, user, biller, account_ref, amount_minor, fee, total,
+                          currency, mode, idempotency_key, product_code) -> Payment:
+    """
+    An agent pays a customer's bill / airtime / data from their float (the customer gave
+    the agent cash). Delivered immediately; a biller failure puts the money back in the float.
+    One payment at a time per agent, so racing requests can't overdraw the float.
+    """
+    agent = user.agent_profile
+    with kyc_limits.serialized_debits(user):
+        float_acc = accounts.agent_float(str(agent.id), currency)
+        if natural_balance_of(float_acc) < total:
+            raise PaymentError("Not enough float for this payment. Top up your float first.")
+        payment = Payment.objects.create(
+            reference=new_reference(), purpose=purpose, status=Payment.Status.PENDING, user=user, biller=biller,
+            account_ref=account_ref, product_code=product_code, amount_minor=amount_minor, fee_minor=fee,
+            total_minor=total, currency=currency, funding_source=Payment.Source.AGENT_FLOAT, network="agent",
+            payer=user.phone, rail=getattr(settings, "RAIL_PROVIDER", "mock"), mode=mode,
+            idempotency_key=idempotency_key,
+        )
+        try:
+            return confirm_collection_and_deliver(payment)
+        except InsufficientFunds as exc:
+            fail_payment(payment, "insufficient_float")
+            raise PaymentError("Not enough float for this payment. Top up your float first.") from exc
 
 
 @kyc_limits.debits_serialized("user")
@@ -283,10 +320,16 @@ def confirm_collection_and_deliver(payment: Payment) -> Payment:
         return payment
 
     cur = payment.currency
-    from_wallet = payment.funding_source == Payment.Source.WALLET
-    # Where the customer's money came from: the rail (MoMo collection) or their wallet.
-    source_acc = (accounts.customer_wallet(str(payment.user_id), cur) if from_wallet
-                  else accounts.partner_clearing(payment.rail, cur))
+    # Where the money came from: the rail (MoMo collection), the customer's wallet, or the
+    # float of an agent paying on a customer's behalf. Wallet and float are SokoPay
+    # balances, so a biller failure puts the money straight back.
+    from_wallet = payment.funding_source in (Payment.Source.WALLET, Payment.Source.AGENT_FLOAT)
+    if payment.funding_source == Payment.Source.AGENT_FLOAT:
+        source_acc = accounts.agent_float(str(payment.user.agent_profile.id), cur)
+    elif from_wallet:
+        source_acc = accounts.customer_wallet(str(payment.user_id), cur)
+    else:
+        source_acc = accounts.partner_clearing(payment.rail, cur)
     biller_acc = accounts.biller_payable(payment.biller.code, cur)
     fee_acc = accounts.fee_revenue(cur)
 
@@ -326,7 +369,8 @@ def confirm_collection_and_deliver(payment: Payment) -> Payment:
             reverse.append(debit(fee_acc, payment.fee_minor))
         if from_wallet:
             reverse.append(credit(source_acc, payment.total_minor))
-            narrative, final = "Refunded to wallet (biller failed)", Payment.Status.REFUNDED
+            where = "float" if payment.funding_source == Payment.Source.AGENT_FLOAT else "wallet"
+            narrative, final = f"Refunded to {where} (biller failed)", Payment.Status.REFUNDED
         else:
             reverse.append(credit(accounts.refund_payable(cur), payment.total_minor))
             narrative, final = "Refund pending (biller failed)", Payment.Status.FAILED

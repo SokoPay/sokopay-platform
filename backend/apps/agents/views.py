@@ -10,6 +10,12 @@ Endpoints (/api/v1/agent/…):
   GET  transactions  → recent agent transactions (home screen)
   GET  history       ?kind=&period=&cursor= → full history, paged, with summary
   GET  transactions/<uuid>                  → one transaction
+  GET  earnings                             → redeemable now / awaiting payout / per-transaction list
+  POST earnings/redeem {pin}                → move redeemable earnings into the float
+  POST sell/airtime|data|bill {…, pin, receipt_phone?, receipt_email?} → pay for a customer from the float
+  GET  deposit-accounts                     → SokoPay bank accounts to pay cash into
+  GET/POST deposits                         → bank deposits submitted to buy float (multipart, slip photo)
+  GET  statements?from&to&file              → float statement (activity.statement_views)
 Customer numbers are masked in all read endpoints.
 """
 
@@ -53,16 +59,18 @@ class AgentMeView(_AgentView):
         if agent is None:
             return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
         balance = services.float_balance(agent)
-        from apps.pricing.services import unpaid_minor
-        commission = unpaid_minor(agent)
+        from apps.pricing.services import earnings
+        e = earnings(agent)
+        commission = e["redeemable_minor"] + e["awaiting_payout_minor"]
         return Response({
             "display_name": agent.display_name,
             "location": agent.location,
             "float_minor": balance,
             "float_display": Money(balance, "GHS").format(),
-            # Earned and not yet paid into the float (paid monthly).
+            # Earned and not yet in the float (cash-in/sales: redeem any time; cash-out: fortnightly).
             "commission_minor": commission,
             "commission_display": Money(commission, "GHS").format(),
+            "redeemable_display": Money(e["redeemable_minor"], "GHS").format(),
         })
 
 
@@ -223,10 +231,10 @@ class AgentTxnsView(_AgentView):
 
 # --- full history ------------------------------------------------------------------
 HISTORY_PAGE = 30
-KIND_FILTERS = {"cash_in", "cash_out", "topup"}
-# How each kind changes the agent's float: cash-in spends float (customer's wallet is
-# credited from it); cash-out and top-ups add to it.
-FLOAT_SIGN = {"cash_in": -1, "cash_out": +1, "topup": +1}
+KIND_FILTERS = {"cash_in", "cash_out", "topup", "airtime", "data", "bill"}
+# How each kind changes the agent's float: cash-in and sales spend float (the customer's
+# wallet / bill is paid from it); cash-out and top-ups add to it.
+FLOAT_SIGN = {"cash_in": -1, "cash_out": +1, "topup": +1, "airtime": -1, "data": -1, "bill": -1}
 
 
 def _ghs(minor: int) -> str:
@@ -245,6 +253,9 @@ def _txn_json(t) -> dict:
         "float_effect_display": ("+ " if sign > 0 else "− ") + _ghs(t.amount_minor),
         "customer": mask_phone(t.customer_phone) if t.customer_phone else "",
         "created_at": t.created_at.isoformat(),
+        "commission_display": _ghs(c.amount_minor) if (c := getattr(t, "commission", None)) else "",
+        "payment_reference": t.payment.reference if t.payment_id else "",
+        "token": t.payment.delivery_token if t.payment_id else "",
     }
 
 
@@ -283,12 +294,13 @@ class AgentHistoryView(_AgentView):
             summary = {
                 k: {"count": totals.get(k, {}).get("n", 0),
                     "total_display": _ghs(totals.get(k, {}).get("total") or 0)}
-                for k in ("cash_in", "cash_out", "topup")
+                for k in ("cash_in", "cash_out", "topup", "airtime", "data", "bill")
             }
             summary["float_display"] = _ghs(services.float_balance(agent))
 
         try:
-            rows, next_cursor = pagination.page(qs, cursor, HISTORY_PAGE)
+            rows, next_cursor = pagination.page(qs.select_related("commission", "payment"), cursor,
+                                                HISTORY_PAGE)
         except pagination.BadCursor:
             return Response({"error": "Invalid cursor."}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"results": [_txn_json(t) for t in rows], "next_cursor": next_cursor,
@@ -302,3 +314,144 @@ class AgentTxnDetailView(_AgentView):
             return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
         txn = get_object_or_404(AgentTxn, pk=pk, agent=agent)     # only your own
         return Response(_txn_json(txn))
+
+
+
+# --- earnings ---------------------------------------------------------------------------------
+class EarningsView(_AgentView):
+    """GET /agent/earnings?cursor= — totals and the commission earned on each transaction."""
+
+    def get(self, request):
+        from apps.pricing.models import AgentCommission
+        from apps.pricing.services import earnings
+        agent = self.get_agent(request)
+        if agent is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        e = earnings(agent)
+        qs = AgentCommission.objects.filter(agent=agent).select_related("txn")
+        try:
+            rows, next_cursor = pagination.page(qs, request.query_params.get("cursor"), HISTORY_PAGE)
+        except pagination.BadCursor:
+            return Response({"error": "Invalid cursor."}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({
+            "redeemable": _ghs(e["redeemable_minor"]), "redeemable_minor": e["redeemable_minor"],
+            "awaiting_payout": _ghs(e["awaiting_payout_minor"]),
+            "paid": _ghs(e["paid_minor"]),
+            "next_payout_due": e["next_payout_due"].date().isoformat() if e["next_payout_due"] else None,
+            "results": [{
+                "id": str(c.id), "product": c.product, "product_display": c.txn.get_kind_display(),
+                "transaction_reference": "AG-" + c.txn.id.hex[:10].upper(),
+                "transaction_amount": _ghs(c.txn.amount_minor), "amount": _ghs(c.amount_minor),
+                "status": ("paid" if c.paid_at else "awaiting_payout" if c.product == "cash_out" else "redeemable"),
+                "settled_via": c.settled_via, "created_at": c.created_at.isoformat(),
+            } for c in rows],
+            "next_cursor": next_cursor,
+        })
+
+
+class RedeemView(_AgentView):
+    def post(self, request):
+        from apps.accounts.stepup import require_pin
+        from apps.pricing.services import PricingError, redeem_commission
+        agent = self.get_agent(request)
+        if agent is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        if (denied := require_pin(request)) is not None:
+            return denied
+        try:
+            amount = redeem_commission(agent, actor=request.user)
+        except PricingError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"redeemed": _ghs(amount), "float": _ghs(services.float_balance(agent))})
+
+
+# --- selling to customers ---------------------------------------------------------------------
+class SellView(_AgentView):
+    """POST /agent/sell/<airtime|data|bill> — paid from the float; PIN required."""
+
+    def post(self, request, kind):
+        from apps.accounts.stepup import require_pin
+        from apps.payments.serializers import PaymentSerializer
+
+        from . import sales
+        agent = self.get_agent(request)
+        if agent is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        if kind not in ("airtime", "data", "bill"):
+            return Response({"error": "Unknown item."}, status=status.HTTP_404_NOT_FOUND)
+        if (denied := require_pin(request)) is not None:
+            return denied
+        d = request.data
+        amount_minor = 0
+        if kind != "data":
+            try:
+                amount_minor = Money.from_major(str(d.get("amount", "")), "GHS").minor
+            except Exception:  # noqa: BLE001 - any bad amount is the same answer
+                return Response({"error": "Enter a valid amount."}, status=status.HTTP_400_BAD_REQUEST)
+            if amount_minor <= 0:
+                return Response({"error": "Enter a valid amount."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            payment, txn = sales.sell(
+                agent=agent, kind=kind, receipt_phone=str(d.get("receipt_phone", "")),
+                receipt_email=str(d.get("receipt_email", "")), idempotency_key=request.headers.get("Idempotency-Key"),
+                biller_code=str(d.get("biller_code", "")), account=str(d.get("account", "")),
+                amount_minor=amount_minor, telco=str(d.get("telco", "")), bundle_code=str(d.get("bundle_code", "")))
+        except AgentError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        body = PaymentSerializer(payment).data
+        body["transaction"] = _txn_json(txn) if txn else None
+        body["float"] = _ghs(services.float_balance(agent))
+        ok = payment.status == "succeeded"
+        return Response(body, status=status.HTTP_201_CREATED if ok else status.HTTP_400_BAD_REQUEST)
+
+
+# --- buying float by bank deposit ---------------------------------------------------------------
+class DepositAccountsView(_AgentView):
+    def get(self, request):
+        from .models import DepositAccount
+        if self.get_agent(request) is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        return Response([{"id": a.id, "bank_name": a.bank_name, "account_name": a.account_name,
+                          "account_number": a.account_number, "branch": a.branch}
+                         for a in DepositAccount.objects.filter(is_active=True)])
+
+
+def _deposit_json(t) -> dict:
+    return {"id": str(t.id), "bank": t.deposit_account.bank_name if t.deposit_account_id else "",
+            "amount": _ghs(t.amount_minor), "reference": t.payment_reference,
+            "deposit_date": t.deposit_date.isoformat() if t.deposit_date else None,
+            "status": t.status, "status_display": t.get_status_display(), "note": t.note,
+            "submitted_at": t.created_at.isoformat(), "has_slip": bool(t.slip_key)}
+
+
+class DepositsView(_AgentView):
+    from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        agent = self.get_agent(request)
+        if agent is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        rows = agent.float_topups.select_related("deposit_account").order_by("-created_at")[:50]
+        return Response([_deposit_json(t) for t in rows])
+
+    def post(self, request):
+        import datetime as dt
+
+        from . import sales
+        agent = self.get_agent(request)
+        if agent is None:
+            return Response({"error": "Not an active agent."}, status=status.HTTP_403_FORBIDDEN)
+        d = request.data
+        try:
+            amount_minor = Money.from_major(str(d.get("amount", "")), "GHS").minor
+            deposit_date = dt.date.fromisoformat(str(d.get("deposit_date", "")))
+        except Exception:  # noqa: BLE001
+            return Response({"error": "Enter the amount and the date on the slip."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            topup = sales.submit_deposit(agent=agent, deposit_account_id=d.get("deposit_account"),
+                                         amount_minor=amount_minor, reference=str(d.get("reference", "")),
+                                         deposit_date=deposit_date, slip=request.FILES.get("slip"))
+        except AgentError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response(_deposit_json(topup), status=status.HTTP_201_CREATED)

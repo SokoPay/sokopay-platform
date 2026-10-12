@@ -18,4 +18,9 @@ urlpatterns = [
     path("agent/transactions", views.AgentTxnsView.as_view(), name="transactions"),
     path("agent/transactions/<uuid:pk>", views.AgentTxnDetailView.as_view(), name="transaction"),
     path("agent/history", views.AgentHistoryView.as_view(), name="history"),
+    path("agent/earnings", views.EarningsView.as_view(), name="earnings"),
+    path("agent/earnings/redeem", views.RedeemView.as_view(), name="earnings-redeem"),
+    path("agent/sell/<str:kind>", views.SellView.as_view(), name="sell"),
+    path("agent/deposit-accounts", views.DepositAccountsView.as_view(), name="deposit-accounts"),
+    path("agent/deposits", views.DepositsView.as_view(), name="deposits"),
 ]

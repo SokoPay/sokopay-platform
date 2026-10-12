@@ -9,8 +9,9 @@ Prices in force, maker-checker changes, and agent commissions.
                                 never retroactive (approval moves a past start to "now")
   accrue_commission(txn, ...)   on each cash-in / cash-out:
                                     Dr commission_expense   Cr agent_commission:<agent>
-  pay_commissions()             monthly: move accrued commission into the agent's float
-                                    Dr agent_commission:<agent>   Cr agent_float:<agent>
+  redeem_commission(agent)      the agent moves cash-in / sales commission into their float, any time
+  prepare_payout / decide_payout  fortnightly: finance pays cash-out commission (two people)
+                                    both: Dr agent_commission:<agent>   Cr agent_float:<agent>
 
 Abuse controls on commission: none on an agent's own wallet; none below
 COMMISSION_MIN_TXN_MINOR (tiny cash-in/out cycles just to farm commission); suspended
@@ -30,7 +31,7 @@ from apps.ledger import accounts
 from apps.ledger.services import credit, debit, post_entry
 from apps.common.audit import audited
 
-from .models import AgentCommission, PriceRule, Promotion
+from .models import AgentCommission, CommissionPayout, PriceRule, Promotion
 
 MAX_PERCENT_BP = 1000          # 10%: a typo guard, not a business limit
 MAX_FLAT_MINOR = 100_00        # GH₵100
@@ -156,14 +157,19 @@ def decide(rule: PriceRule, *, approver, approve: bool) -> PriceRule:
 
 
 # --- agent commissions ----------------------------------------------------------------------
-def accrue_commission(*, txn, product: str, customer=None) -> AgentCommission | None:
-    """Call inside the cash-in / cash-out transaction, after the money moved."""
+def accrue_commission(*, txn, product: str, customer=None, on_minor: int | None = None) -> AgentCommission | None:
+    """
+    Call inside the cash-in / cash-out / sale transaction, after the money moved. `on_minor`:
+    the value commission is earned on when it isn't the txn amount (a sale: face value, not
+    the customer's fee).
+    """
     agent = txn.agent
-    if txn.amount_minor < COMMISSION_MIN_TXN_MINOR:
+    base = txn.amount_minor if on_minor is None else on_minor
+    if base < COMMISSION_MIN_TXN_MINOR:
         return None
     if customer is not None and customer.id == agent.user_id:
         return None                                           # no commission on yourself
-    amount, rule = commission(product, txn.amount_minor)
+    amount, rule = commission(product, base)
     if amount <= 0:
         return None
     cur = txn.currency
@@ -178,8 +184,124 @@ def unpaid_minor(agent) -> int:
     return int(AgentCommission.objects.filter(agent=agent, paid_at=None).aggregate(s=Sum("amount_minor"))["s"] or 0)
 
 
+PAYOUT_PRODUCTS = ("cash_out",)          # paid by SokoPay every two weeks
+PAYOUT_INTERVAL_DAYS = 14
+
+
+def earnings(agent) -> dict:
+    """What the Agent app shows: redeemable now, waiting for the fortnightly payout, paid so far."""
+    unpaid = AgentCommission.objects.filter(agent=agent, paid_at=None)
+    redeemable = unpaid.exclude(product__in=PAYOUT_PRODUCTS)
+    awaiting = unpaid.filter(product__in=PAYOUT_PRODUCTS)
+
+    def total(qs):
+        return int(qs.aggregate(s=Sum("amount_minor"))["s"] or 0)
+    last = CommissionPayout.objects.filter(status=CommissionPayout.Status.PAID).order_by("-decided_at").first()
+    next_due = (last.decided_at if last else None)
+    return {
+        "redeemable_minor": total(redeemable),
+        "awaiting_payout_minor": total(awaiting),
+        "paid_minor": total(AgentCommission.objects.filter(agent=agent).exclude(paid_at=None)),
+        "next_payout_due": (next_due + timedelta(days=PAYOUT_INTERVAL_DAYS)) if next_due else None,
+    }
+
+
+@audited("commission.redeem", actor="actor", obj="agent")
+def redeem_commission(agent, *, actor) -> int:
+    """Move every redeemable (non-cash-out) unpaid commission into the agent's float. Returns pesewas."""
+    from apps.agents.models import Agent
+    from apps.notifications.services import ghs, notify
+    if agent.status != Agent.Status.ACTIVE:
+        raise PricingError("Your agent account isn't active, so earnings are held. Contact SokoPay.")
+    with transaction.atomic():
+        rows = list(AgentCommission.objects.select_for_update().filter(agent=agent, paid_at=None)
+                    .exclude(product__in=PAYOUT_PRODUCTS).order_by("created_at"))
+        amount = sum(r.amount_minor for r in rows)
+        if amount <= 0:
+            raise PricingError("There's nothing to redeem yet.")
+        now = timezone.now()
+        post_entry("Agent commission redeemed",
+                   [debit(accounts.agent_commission(str(agent.id)), amount),
+                    credit(accounts.agent_float(str(agent.id)), amount)],
+                   idempotency_key=f"commission-redeem:{agent.id}:{rows[-1].id}",
+                   reference=("agent_commission", str(agent.id)))
+        AgentCommission.objects.filter(pk__in=[r.pk for r in rows]).update(
+            paid_at=now, settled_via=AgentCommission.Settled.REDEEMED)
+    notify(agent.user, kind="payment", title="Earnings redeemed", app="agent",
+           body=f"{ghs(amount)} of earnings is now in your float.", data={"type": "float"})
+    return amount
+
+
+@audited("commission.payout_prepare", actor="prepared_by")
+def prepare_payout(*, prepared_by, period_end=None) -> CommissionPayout:
+    """Maker: gather every unpaid cash-out commission up to `period_end` into a payout batch."""
+    period_end = period_end or timezone.now()
+    if CommissionPayout.objects.filter(status=CommissionPayout.Status.PENDING).exists():
+        raise PricingError("A payout is already waiting for approval. Approve or reject it first.")
+    with transaction.atomic():
+        rows = list(AgentCommission.objects.select_for_update()
+                    .filter(paid_at=None, payout=None, product__in=PAYOUT_PRODUCTS, created_at__lte=period_end))
+        if not rows:
+            raise PricingError("There's no unpaid cash-out commission to pay.")
+        payout = CommissionPayout.objects.create(
+            period_end=period_end, total_minor=sum(r.amount_minor for r in rows),
+            agent_count=len({r.agent_id for r in rows}), prepared_by=prepared_by)
+        AgentCommission.objects.filter(pk__in=[r.pk for r in rows]).update(payout=payout)
+    return payout
+
+
+@audited("commission.payout_decide", actor="approver", fields=("approve",))
+def decide_payout(payout: CommissionPayout, *, approver, approve: bool) -> CommissionPayout:
+    """Checker: a DIFFERENT finance user pays it (each active agent's float credited) or rejects it."""
+    from apps.agents.models import Agent
+    from apps.notifications.services import ghs, notify
+    with transaction.atomic():
+        p = CommissionPayout.objects.select_for_update().get(pk=payout.pk)
+        if p.status != CommissionPayout.Status.PENDING:
+            raise PricingError("This payout has already been decided.")
+        if approver.id == p.prepared_by_id:
+            raise PricingError("A different finance user must approve the payout.")
+        now = timezone.now()
+        rows = list(AgentCommission.objects.select_for_update().filter(payout=p, paid_at=None)
+                    .select_related("agent"))
+        if not approve:
+            AgentCommission.objects.filter(pk__in=[r.pk for r in rows]).update(payout=None)
+            p.status = CommissionPayout.Status.REJECTED
+        else:
+            by_agent: dict = {}
+            for r in rows:
+                by_agent.setdefault(r.agent, []).append(r)
+            paid_total, held = 0, []
+            for agent, items in by_agent.items():
+                if agent.status != Agent.Status.ACTIVE:          # suspended agents: held for the next payout
+                    held += [r.pk for r in items]
+                    continue
+                amount = sum(r.amount_minor for r in items)
+                post_entry(f"Agent commission payout {now:%Y-%m-%d}",
+                           [debit(accounts.agent_commission(str(agent.id)), amount),
+                            credit(accounts.agent_float(str(agent.id)), amount)],
+                           idempotency_key=f"commission-payout:{p.id}:{agent.id}",
+                           reference=("agent_commission", str(agent.id)))
+                AgentCommission.objects.filter(pk__in=[r.pk for r in items]).update(
+                    paid_at=now, settled_via=AgentCommission.Settled.PAYOUT)
+                paid_total += amount
+                transaction.on_commit(lambda a=agent, m=amount: notify(
+                    a.user, kind="payment", title="Cash-out earnings paid", app="agent",
+                    body=f"{ghs(m)} of cash-out earnings has been added to your float.", data={"type": "float"}))
+            if held:
+                AgentCommission.objects.filter(pk__in=held).update(payout=None)
+            p.status = CommissionPayout.Status.PAID
+            p.total_minor = paid_total
+        p.decided_by, p.decided_at = approver, now
+        p.save(update_fields=["status", "total_minor", "decided_by", "decided_at", "updated_at"])
+    return p
+
+
 def pay_commissions() -> dict:
-    """Pay accrued commission into each ACTIVE agent's float (suspended agents: held)."""
+    """
+    Legacy all-at-once payout (no longer scheduled): kept for operations scripts only. Pays
+    every accrued commission into each ACTIVE agent's float (suspended agents: held).
+    """
     from apps.agents.models import Agent
     from apps.notifications.services import ghs, notify
     paid_agents, total = 0, 0

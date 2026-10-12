@@ -40,12 +40,41 @@ class Agent(TimeStampedModel):
         return self.status == self.Status.ACTIVE
 
 
+class DepositAccount(TimeStampedModel):
+    """
+    A SokoPay bank account agents can pay cash into to buy float (shown in the Agent app).
+    These are SokoPay's own collection accounts, so the full number is stored and shown.
+    Managed by finance in the back office.
+    """
+
+    bank_name = models.CharField(max_length=100)
+    account_name = models.CharField(max_length=150)
+    account_number = models.CharField(max_length=34)
+    branch = models.CharField(max_length=100, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = "agents_deposit_account"
+        ordering = ("bank_name",)
+
+    def __str__(self) -> str:
+        return f"{self.bank_name} {self.account_number}"
+
+
 class FloatTopUp(TimeStampedModel):
     """
     An agent bought float (paid SokoPay by bank transfer / MoMo). Maker-checker: one
     staff member records it against the payment reference, a DIFFERENT one approves after
     checking the money arrived — only then is the float credited.
+
+    Agents can also submit their own bank deposit from the Agent app (channel "agent"):
+    the bank, the amount, the deposit slip reference and date, and optionally a photo of
+    the slip. Staff check it against the bank statement and approve or reject.
     """
+
+    class Channel(models.TextChoices):
+        STAFF = "staff", "Recorded by staff"
+        AGENT = "agent", "Bank deposit submitted by the agent"
 
     class Status(models.TextChoices):
         PENDING = "pending", "Awaiting approval"
@@ -55,6 +84,11 @@ class FloatTopUp(TimeStampedModel):
     agent = models.ForeignKey(Agent, on_delete=models.PROTECT, related_name="float_topups")
     amount_minor = models.BigIntegerField()
     payment_reference = models.CharField(max_length=64)       # bank / MoMo reference of the agent's payment
+    channel = models.CharField(max_length=8, choices=Channel.choices, default=Channel.STAFF)
+    deposit_account = models.ForeignKey(DepositAccount, on_delete=models.PROTECT, null=True, blank=True,
+                                        related_name="+")
+    deposit_date = models.DateField(null=True, blank=True)
+    slip_key = models.CharField(max_length=256, blank=True)  # encrypted photo of the deposit slip
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
     requested_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+")
     decided_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, null=True,
@@ -130,12 +164,20 @@ class AgentTxn(TimeStampedModel):
         TOPUP = "topup", "Float top-up"
         CASH_IN = "cash_in", "Cash in"
         CASH_OUT = "cash_out", "Cash out"
+        AIRTIME = "airtime", "Airtime sold"
+        DATA = "data", "Data bundle sold"
+        BILL = "bill", "Bill paid"
 
     agent = models.ForeignKey(Agent, on_delete=models.PROTECT, related_name="transactions")
     kind = models.CharField(max_length=10, choices=Kind.choices)
     customer_phone = models.CharField(max_length=16, blank=True)
     amount_minor = models.BigIntegerField()
     currency = models.CharField(max_length=3, default="GHS")
+    # Sales (airtime / data / bills) paid from the float on a customer's behalf:
+    payment = models.OneToOneField("payments.Payment", on_delete=models.PROTECT, null=True, blank=True,
+                                   related_name="agent_txn")
+    receipt_phone = models.CharField(max_length=16, blank=True)
+    receipt_email = models.EmailField(blank=True)
 
     class Meta:
         db_table = "agents_txn"

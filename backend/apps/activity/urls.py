@@ -10,4 +10,5 @@ urlpatterns = [
     path("statements/link", statement_views.StatementLinkView.as_view(), name="statement-link"),
     path("statements/download", statement_views.StatementDownloadView.as_view(), name="statement-download"),
     path("merchant-app/statements", statement_views.MerchantStatementView.as_view(), name="merchant-statement"),
+    path("agent/statements", statement_views.AgentStatementView.as_view(), name="agent-statement"),
 ]

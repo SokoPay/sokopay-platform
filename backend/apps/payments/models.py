@@ -73,6 +73,7 @@ class Payment(TimeStampedModel):
     class Source(models.TextChoices):
         MOMO = "momo", "Mobile money (collected via the rail)"
         WALLET = "wallet", "SokoPay wallet (DEMI)"
+        AGENT_FLOAT = "agent_float", "Agent float (an agent paying for a customer)"
 
     reference = models.CharField(max_length=16, unique=True, db_index=True)  # SP-...
     purpose = models.CharField(max_length=16, choices=Purpose.choices)
@@ -100,7 +101,7 @@ class Payment(TimeStampedModel):
     total_minor = models.BigIntegerField()
     currency = models.CharField(max_length=3, default="GHS")
 
-    funding_source = models.CharField(max_length=8, choices=Source.choices, default=Source.MOMO)
+    funding_source = models.CharField(max_length=12, choices=Source.choices, default=Source.MOMO)
     network = models.CharField(max_length=16)                   # mtn/telecel/at/card, or "wallet"
     payer = models.CharField(max_length=32, blank=True)         # E.164 phone; masked in API output
 

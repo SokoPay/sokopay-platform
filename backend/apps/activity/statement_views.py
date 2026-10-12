@@ -3,7 +3,8 @@ Statements API.
 
   GET  /statements?from=YYYY-MM-DD&to=YYYY-MM-DD&file=csv|pdf   customer wallet (JSON without file=)
   GET  /merchant-app/statements?from&to&file                            merchant balance (Owner/Admin/Finance)
-  POST /statements/link            {from, to, file: pdf|csv, scope: customer|merchant}
+  GET  /agent/statements?from&to&file                                   agent float (active agents)
+  POST /statements/link            {from, to, file: pdf|csv, scope: customer|merchant|agent}
        → {"url": "/api/v1/statements/download?t=<signed single-use token>", "expires_in": 300}
   GET  /statements/download?t=…    the file; no login header needed (token is single-use, 5 min)
 
@@ -36,8 +37,19 @@ def _merchant_for(user):
     return m.merchant
 
 
+def _agent_for(user):
+    agent = getattr(user, "agent_profile", None)
+    if agent is None or agent.status != "active":
+        raise PermissionDenied("Statements are for active agents.")
+    return agent
+
+
 def _build(scope: str, owner, start, end) -> dict:
-    return st.merchant_statement(owner, start, end) if scope == "merchant" else st.customer_statement(owner, start, end)
+    if scope == "merchant":
+        return st.merchant_statement(owner, start, end)
+    if scope == "agent":
+        return st.agent_statement(owner, start, end)
+    return st.customer_statement(owner, start, end)
 
 
 def file_response(statement: dict, fmt: str, scope: str):
@@ -88,13 +100,20 @@ class MerchantStatementView(_StatementBase):
         return _merchant_for(request.user)
 
 
+class AgentStatementView(_StatementBase):
+    scope = "agent"
+
+    def owner(self, request):
+        return _agent_for(request.user)
+
+
 class StatementLinkView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         scope = request.data.get("scope", "customer")
         fmt = request.data.get("file", "pdf")
-        if scope not in ("customer", "merchant") or fmt not in ("csv", "pdf"):
+        if scope not in ("customer", "merchant", "agent") or fmt not in ("csv", "pdf"):
             return Response({"error": "Unknown scope or format."}, status=status.HTTP_400_BAD_REQUEST)
         if not ratelimit.allow("statement", str(request.user.id)):
             return Response({"error": "Too many statements requested. Please wait."},
@@ -103,7 +122,12 @@ class StatementLinkView(APIView):
             start, end = st.parse_period(request.data.get("from"), request.data.get("to"))
         except st.StatementError as exc:
             return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        owner_id = str(_merchant_for(request.user).id) if scope == "merchant" else str(request.user.id)
+        if scope == "merchant":
+            owner_id = str(_merchant_for(request.user).id)
+        elif scope == "agent":
+            owner_id = str(_agent_for(request.user).id)
+        else:
+            owner_id = str(request.user.id)
         # The token is bound to the requesting user too, so a merchant link can't outlive their role.
         token = st.make_link_token(kind=f"{scope}:{request.user.id}", owner_id=owner_id, start=start, end=end, fmt=fmt)
         return Response({"url": request.build_absolute_uri(f"/api/v1/statements/download?t={token}"),
@@ -133,6 +157,14 @@ class StatementDownloadView(APIView):
             if str(merchant.id) != data["o"]:
                 return HttpResponse("Not allowed.", status=403, content_type="text/plain")
             statement = st.merchant_statement(merchant, start, end)
+        elif scope == "agent":
+            try:
+                agent = _agent_for(user)                 # re-checked: may have been suspended
+            except PermissionDenied:
+                return HttpResponse("Not allowed.", status=403, content_type="text/plain")
+            if str(agent.id) != data["o"]:
+                return HttpResponse("Not allowed.", status=403, content_type="text/plain")
+            statement = st.agent_statement(agent, start, end)
         else:
             if str(user.id) != data["o"]:
                 return HttpResponse("Not allowed.", status=403, content_type="text/plain")
