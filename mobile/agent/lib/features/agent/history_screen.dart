@@ -19,7 +19,8 @@ class HistoryScreen extends StatefulWidget {
 
 class _HistoryScreenState extends State<HistoryScreen> {
   static const _kinds = <String?, String>{
-    null: 'All', 'cash_in': 'Cash in', 'cash_out': 'Cash out', 'topup': 'Top-ups',
+    null: 'All', 'cash_in': 'Cash in', 'cash_out': 'Cash out', 'airtime': 'Airtime', 'data': 'Data',
+    'bill': 'Bills', 'topup': 'Top-ups',
   };
   static const _periods = <String?, String>{
     'today': 'Today', '7d': 'Last 7 days', '30d': 'Last 30 days', null: 'All time',
@@ -212,6 +213,11 @@ class _SummaryCard extends StatelessWidget {
           cell('Cash out', summary.cashOut),
           cell('Top-ups', summary.topup),
         ]),
+        if (summary.salesCount > 0) ...[
+          const SizedBox(height: 8),
+          Text('${summary.salesCount} airtime, data and bill sale${summary.salesCount == 1 ? '' : 's'}',
+              style: const TextStyle(color: Colors.white60, fontSize: 12)),
+        ],
       ]),
     );
   }
@@ -227,6 +233,7 @@ class _TxnTile extends StatelessWidget {
     final (icon, color) = kindStyle(txn.kind);
     final subtitle = [
       DateFormat('HH:mm').format(txn.createdAt),
+      txn.reference,
       if (txn.customer.isNotEmpty) txn.customer,
     ].join(' · ');
     return ListTile(
@@ -241,6 +248,8 @@ class _TxnTile extends StatelessWidget {
         children: [
           Text(txn.amountDisplay, style: const TextStyle(fontWeight: FontWeight.w600)),
           Text('Float ${txn.floatEffect}', style: const TextStyle(fontSize: 11, color: SokoColors.inkMuted)),
+          if (txn.commission.isNotEmpty)
+            Text('Earned ${txn.commission}', style: const TextStyle(fontSize: 11, color: SokoColors.success)),
         ],
       ),
     );
@@ -250,5 +259,8 @@ class _TxnTile extends StatelessWidget {
 (IconData, Color) kindStyle(String kind) => switch (kind) {
       'cash_in' => (Icons.south_west, SokoColors.success),
       'cash_out' => (Icons.north_east, SokoColors.orange),
+      'airtime' => (Icons.phone_android, SokoColors.orange),
+      'data' => (Icons.wifi, SokoColors.orange),
+      'bill' => (Icons.receipt_long, SokoColors.orange),
       _ => (Icons.add_card, SokoColors.ink),
     };

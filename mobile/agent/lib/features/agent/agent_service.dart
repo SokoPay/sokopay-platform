@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:sokopay_shared/sokopay_shared.dart';
 
 /// Agent data access, hitting:
@@ -5,6 +6,9 @@ import 'package:sokopay_shared/sokopay_shared.dart';
 ///   POST /agent/cash-in      {customer_phone, amount}
 ///   POST /agent/cash-out     {customer_phone, amount}
 ///   GET  /agent/transactions
+///   GET  /agent/earnings, POST /agent/earnings/redeem {pin}
+///   POST /agent/sell/airtime|data|bill {…, pin, receipt_phone, receipt_email} (Idempotency-Key)
+///   GET  /agent/deposit-accounts, GET/POST /agent/deposits (multipart, optional slip photo)
 class AgentService {
   AgentService(this._api);
   final ApiClient _api;
@@ -40,7 +44,7 @@ class AgentService {
   }
 
   /// One page of the full history, newest first. Pass the previous page's
-  /// [HistoryPage.nextCursor] for more. [kind]: cash_in|cash_out|topup;
+  /// [HistoryPage.nextCursor] for more. [kind]: cash_in|cash_out|topup|airtime|data|bill;
   /// [period]: today|7d|30d (null = all time).
   Future<HistoryPage> history({String? kind, String? period, String? cursor}) async {
     final r = await _api.get('/agent/history', query: {
@@ -53,6 +57,63 @@ class AgentService {
 
   Future<HistoryTxn> transaction(String id) async =>
       HistoryTxn.fromJson(Map<String, dynamic>.from((await _api.get('/agent/transactions/$id')).data));
+
+  // --- earnings ---
+  Future<Earnings> earnings({String? cursor}) async => Earnings.fromJson(Map<String, dynamic>.from(
+      (await _api.get('/agent/earnings', query: {if (cursor != null) 'cursor': cursor})).data));
+
+  /// Moves every redeemable earning into the float. Returns e.g. "GH₵ 2.00".
+  Future<String> redeem(String pin) async =>
+      ((await _api.post('/agent/earnings/redeem', data: {'pin': pin})).data as Map)['redeemed'] ?? '';
+
+  // --- selling to customers (paid from the float) ---
+  Future<List<SaleBiller>> billers({String? category}) async {
+    final r = await _api.get('/billers', query: category != null ? {'category': category} : null);
+    return (r.data as List).map((e) => SaleBiller.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<List<SaleBundle>> bundles(String telco) async {
+    final r = await _api.get('/telcos/$telco/bundles');
+    return (r.data as List).map((e) => SaleBundle.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  /// [kind]: airtime | data | bill. Throws on failure (the float is refunded server-side).
+  Future<SaleResult> sell(String kind, Map<String, dynamic> body,
+      {required String pin, required String idempotencyKey}) async {
+    final r = await _api.post('/agent/sell/$kind',
+        data: {...body, 'pin': pin}, headers: {'Idempotency-Key': idempotencyKey});
+    return SaleResult.fromJson(Map<String, dynamic>.from(r.data));
+  }
+
+  // --- buying float by bank deposit ---
+  Future<List<DepositAccount>> depositAccounts() async {
+    final r = await _api.get('/agent/deposit-accounts');
+    return (r.data as List).map((e) => DepositAccount.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<List<FloatDeposit>> deposits() async {
+    final r = await _api.get('/agent/deposits');
+    return (r.data as List).map((e) => FloatDeposit.fromJson(Map<String, dynamic>.from(e))).toList();
+  }
+
+  Future<FloatDeposit> submitDeposit({
+    required String accountId,
+    required String amount,
+    required String reference,
+    required String depositDate, // yyyy-MM-dd
+    List<int>? slipJpeg,
+  }) async {
+    final form = FormData.fromMap({
+      'deposit_account': accountId,
+      'amount': amount,
+      'reference': reference,
+      'deposit_date': depositDate,
+      if (slipJpeg != null)
+        'slip': MultipartFile.fromBytes(slipJpeg, filename: 'slip.jpg', contentType: DioMediaType('image', 'jpeg')),
+    });
+    final r = await _api.post('/agent/deposits', data: form);
+    return FloatDeposit.fromJson(Map<String, dynamic>.from(r.data));
+  }
 }
 
 class CustomerMatch {
@@ -94,15 +155,21 @@ class HistoryTxn {
     required this.floatEffect,
     required this.customer,
     required this.createdAt,
+    this.commission = '',
+    this.paymentReference = '',
+    this.token = '',
   });
   final String id;
   final String reference; // AG-… — quote this to support
-  final String kind; // cash_in | cash_out | topup
+  final String kind; // cash_in | cash_out | topup | airtime | data | bill
   final String kindDisplay;
   final String amountDisplay;
-  final String floatEffect; // "− GH₵ 120.00" (cash-in) / "+ GH₵ 20.00"
+  final String floatEffect; // "− GH₵ 120.00" (cash-in, sales) / "+ GH₵ 20.00"
   final String customer; // masked by the server; empty for top-ups
   final DateTime createdAt;
+  final String commission; // what you earned on it ("" if none)
+  final String paymentReference; // SP-… for airtime / data / bill sales
+  final String token; // e.g. an ECG prepaid token
 
   factory HistoryTxn.fromJson(Map<String, dynamic> j) => HistoryTxn(
         id: j['id'],
@@ -113,6 +180,9 @@ class HistoryTxn {
         floatEffect: j['float_effect_display'] ?? '',
         customer: j['customer'] ?? '',
         createdAt: DateTime.parse(j['created_at']).toLocal(),
+        commission: j['commission_display'] ?? '',
+        paymentReference: j['payment_reference'] ?? '',
+        token: j['token'] ?? '',
       );
 }
 
@@ -125,17 +195,23 @@ class KindTotal {
 }
 
 class HistorySummary {
-  HistorySummary({required this.cashIn, required this.cashOut, required this.topup, required this.float});
+  HistorySummary(
+      {required this.cashIn, required this.cashOut, required this.topup, required this.salesCount, required this.float});
   final KindTotal cashIn;
   final KindTotal cashOut;
   final KindTotal topup;
+  final int salesCount; // airtime + data + bills sold
   final String float;
-  factory HistorySummary.fromJson(Map<String, dynamic> j) => HistorySummary(
-        cashIn: KindTotal.fromJson(Map<String, dynamic>.from(j['cash_in'] ?? {})),
-        cashOut: KindTotal.fromJson(Map<String, dynamic>.from(j['cash_out'] ?? {})),
-        topup: KindTotal.fromJson(Map<String, dynamic>.from(j['topup'] ?? {})),
-        float: j['float_display'] ?? '',
-      );
+  factory HistorySummary.fromJson(Map<String, dynamic> j) {
+    KindTotal k(String key) => KindTotal.fromJson(Map<String, dynamic>.from(j[key] ?? {}));
+    return HistorySummary(
+      cashIn: k('cash_in'),
+      cashOut: k('cash_out'),
+      topup: k('topup'),
+      salesCount: k('airtime').count + k('data').count + k('bill').count,
+      float: j['float_display'] ?? '',
+    );
+  }
 }
 
 class HistoryPage {
@@ -153,16 +229,23 @@ class HistoryPage {
 }
 
 class AgentProfile {
-  AgentProfile({required this.name, required this.floatDisplay, this.commissionMinor = 0, this.commissionDisplay = ''});
+  AgentProfile(
+      {required this.name,
+      required this.floatDisplay,
+      this.commissionMinor = 0,
+      this.commissionDisplay = '',
+      this.redeemableDisplay = ''});
   final String name;
   final String floatDisplay;
-  final int commissionMinor; // earned, paid into the float monthly
+  final int commissionMinor; // earned and not yet in the float
   final String commissionDisplay;
+  final String redeemableDisplay; // the part you can redeem now
   factory AgentProfile.fromJson(Map<String, dynamic> j) => AgentProfile(
         name: j['display_name'] ?? '',
         floatDisplay: j['float_display'] ?? 'GH₵ 0.00',
         commissionMinor: (j['commission_minor'] as num?)?.toInt() ?? 0,
         commissionDisplay: j['commission_display'] ?? '',
+        redeemableDisplay: j['redeemable_display'] ?? '',
       );
 }
 
@@ -175,5 +258,153 @@ class AgentTxn {
         kind: j['kind'],
         customerPhone: j['customer_phone'] ?? '',
         amountMinor: j['amount_minor'] ?? 0,
+      );
+}
+
+// --- earnings ---------------------------------------------------------------------------------
+class Earnings {
+  Earnings(
+      {required this.redeemable,
+      required this.redeemableMinor,
+      required this.awaitingPayout,
+      required this.paid,
+      required this.nextPayoutDue,
+      required this.results,
+      this.nextCursor});
+  final String redeemable; // cash-in and sales commission: redeem any time
+  final int redeemableMinor;
+  final String awaitingPayout; // cash-out commission: paid by SokoPay every two weeks
+  final String paid;
+  final DateTime? nextPayoutDue;
+  final List<EarningRow> results;
+  final String? nextCursor;
+  factory Earnings.fromJson(Map<String, dynamic> j) => Earnings(
+        redeemable: j['redeemable'] ?? '',
+        redeemableMinor: (j['redeemable_minor'] as num?)?.toInt() ?? 0,
+        awaitingPayout: j['awaiting_payout'] ?? '',
+        paid: j['paid'] ?? '',
+        nextPayoutDue: j['next_payout_due'] == null ? null : DateTime.parse(j['next_payout_due']),
+        results: ((j['results'] ?? []) as List)
+            .map((e) => EarningRow.fromJson(Map<String, dynamic>.from(e)))
+            .toList(),
+        nextCursor: j['next_cursor'],
+      );
+}
+
+class EarningRow {
+  EarningRow(
+      {required this.productDisplay,
+      required this.reference,
+      required this.transactionAmount,
+      required this.amount,
+      required this.status,
+      required this.createdAt});
+  final String productDisplay;
+  final String reference; // AG-…
+  final String transactionAmount;
+  final String amount;
+  final String status; // redeemable | awaiting_payout | paid
+  final DateTime createdAt;
+  factory EarningRow.fromJson(Map<String, dynamic> j) => EarningRow(
+        productDisplay: j['product_display'] ?? '',
+        reference: j['transaction_reference'] ?? '',
+        transactionAmount: j['transaction_amount'] ?? '',
+        amount: j['amount'] ?? '',
+        status: j['status'] ?? '',
+        createdAt: DateTime.parse(j['created_at']).toLocal(),
+      );
+}
+
+// --- selling ----------------------------------------------------------------------------------
+class SaleBiller {
+  SaleBiller({required this.code, required this.name, required this.category});
+  final String code;
+  final String name;
+  final String category;
+  factory SaleBiller.fromJson(Map<String, dynamic> j) =>
+      SaleBiller(code: j['code'], name: j['name'] ?? '', category: j['category'] ?? '');
+}
+
+class SaleBundle {
+  SaleBundle({required this.code, required this.name, required this.price, required this.validity});
+  final String code;
+  final String name;
+  final String price;
+  final String validity;
+  factory SaleBundle.fromJson(Map<String, dynamic> j) =>
+      SaleBundle(code: j['code'], name: j['name'] ?? '', price: j['price'] ?? '', validity: j['validity'] ?? '');
+}
+
+class SaleResult {
+  SaleResult(
+      {required this.reference,
+      required this.total,
+      required this.token,
+      required this.floatNow,
+      this.commission = '',
+      this.txnId});
+  final String reference; // SP-…
+  final String total; // what was taken from the float (incl. any fee)
+  final String token; // e.g. an ECG prepaid token
+  final String floatNow;
+  final String commission;
+  final String? txnId;
+  factory SaleResult.fromJson(Map<String, dynamic> j) {
+    final t = j['transaction'] as Map?;
+    return SaleResult(
+      reference: j['reference'] ?? '',
+      total: j['total'] ?? '',
+      token: j['delivery_token'] ?? '',
+      floatNow: j['float'] ?? '',
+      commission: t?['commission_display'] ?? '',
+      txnId: t?['id'],
+    );
+  }
+}
+
+// --- buying float -------------------------------------------------------------------------------
+class DepositAccount {
+  DepositAccount(
+      {required this.id, required this.bankName, required this.accountName, required this.accountNumber, this.branch = ''});
+  final String id;
+  final String bankName;
+  final String accountName;
+  final String accountNumber;
+  final String branch;
+  factory DepositAccount.fromJson(Map<String, dynamic> j) => DepositAccount(
+      id: '${j['id']}',
+      bankName: j['bank_name'] ?? '',
+      accountName: j['account_name'] ?? '',
+      accountNumber: j['account_number'] ?? '',
+      branch: j['branch'] ?? '');
+}
+
+class FloatDeposit {
+  FloatDeposit(
+      {required this.bank,
+      required this.amount,
+      required this.reference,
+      required this.status,
+      required this.statusDisplay,
+      required this.note,
+      required this.submittedAt,
+      this.depositDate});
+  final String bank;
+  final String amount;
+  final String reference;
+  final String status; // pending | approved | rejected
+  final String statusDisplay;
+  final String note;
+  final DateTime submittedAt;
+  final DateTime? depositDate;
+  factory FloatDeposit.fromJson(Map<String, dynamic> j) => FloatDeposit(
+        bank: j['bank'] ?? '',
+        amount: j['amount'] ?? '',
+        reference: j['reference'] ?? '',
+        status: j['status'] ?? '',
+        statusDisplay: j['status_display'] ?? '',
+        note: j['note'] ?? '',
+        submittedAt: DateTime.parse(j['submitted_at']).toLocal(),
+        depositDate: j['deposit_date'] == null ? null : DateTime.parse(j['deposit_date']),
       );
 }

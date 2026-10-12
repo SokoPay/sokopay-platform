@@ -7,8 +7,11 @@ import 'package:sokopay_shared/sokopay_shared.dart';
 import 'core/deep_links.dart';
 import 'core/firebase_push.dart';
 import 'features/agent/cash_op_screen.dart';
+import 'features/agent/deposit_screen.dart';
+import 'features/agent/earnings_screen.dart';
 import 'features/agent/history_screen.dart';
 import 'features/agent/home_screen.dart';
+import 'features/agent/sell_screen.dart';
 import 'features/agent/txn_detail_screen.dart';
 
 Future<void> main() async {
@@ -82,6 +85,10 @@ GoRouter buildRouter(AuthController auth) => GoRouter(
         GoRoute(path: '/inbox', builder: (_, __) => const InboxScreen(resolve: routeForPush)),
         GoRoute(path: '/history', builder: (_, __) => const HistoryScreen()),
         GoRoute(path: '/history/:id', builder: (_, s) => TxnDetailScreen(id: s.pathParameters['id']!)),
+        GoRoute(path: '/earnings', builder: (_, __) => const EarningsScreen()),
+        GoRoute(path: '/sell/:kind', builder: (_, s) => SellScreen(kind: s.pathParameters['kind']!)),
+        GoRoute(path: '/buy-float', builder: (_, __) => const DepositScreen()),
+        GoRoute(path: '/statements', builder: (_, __) => const StatementScreen(scope: 'agent')),
       ],
     );
 

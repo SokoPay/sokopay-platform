@@ -26,7 +26,27 @@ class _StatementScreenState extends State<StatementScreen> {
   Future<Map<String, dynamic>>? _statement;
   final _day = DateFormat('yyyy-MM-dd');
 
-  String get _path => widget.scope == 'merchant' ? '/merchant-app/statements' : '/statements';
+  String get _path => switch (widget.scope) {
+        'merchant' => '/merchant-app/statements',
+        'agent' => '/agent/statements',
+        _ => '/statements',
+      };
+
+  /// Quick periods: today, this week (from Monday), month, quarter, year (to date).
+  static Map<String, DateTimeRange> _presets(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    final q = ((now.month - 1) ~/ 3) * 3 + 1;
+    return {
+      'Today': DateTimeRange(start: today, end: today),
+      'This week': DateTimeRange(start: today.subtract(Duration(days: now.weekday - 1)), end: today),
+      'This month': DateTimeRange(start: DateTime(now.year, now.month, 1), end: today),
+      'This quarter': DateTimeRange(start: DateTime(now.year, q, 1), end: today),
+      'This year': DateTimeRange(start: DateTime(now.year, 1, 1), end: today),
+    };
+  }
+
+  bool _same(DateTimeRange a, DateTimeRange b) =>
+      _day.format(a.start) == _day.format(b.start) && _day.format(a.end) == _day.format(b.end);
 
   @override
   void initState() {
@@ -96,6 +116,24 @@ class _StatementScreenState extends State<StatementScreen> {
           title: Text('${label.format(_range.start)} – ${label.format(_range.end)}'),
           trailing: const Icon(Icons.edit_calendar_outlined),
           onTap: _pickRange,
+        ),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+          child: Row(children: [
+            for (final e in _presets(DateTime.now()).entries)
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: ChoiceChip(
+                  label: Text(e.key),
+                  selected: _same(_range, e.value),
+                  onSelected: (_) {
+                    _range = e.value;
+                    _load();
+                  },
+                ),
+              ),
+          ]),
         ),
         const Divider(height: 1),
         Expanded(

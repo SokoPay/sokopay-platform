@@ -6,7 +6,8 @@ import 'package:sokopay_shared/sokopay_shared.dart';
 
 import 'agent_service.dart';
 
-/// Agent home: shows float balance and the two core actions (cash-in, cash-out).
+/// Agent home: float balance, earnings, cash-in / cash-out and the other services
+/// (airtime, data, bills, buying float, earnings, statements).
 class AgentHomeScreen extends StatefulWidget {
   const AgentHomeScreen({super.key});
   @override
@@ -85,8 +86,15 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                               fontWeight: FontWeight.w700)),
                       if ((snap.data?.commissionMinor ?? 0) > 0) ...[
                         const SizedBox(height: 6),
-                        Text('Commission earned: ${snap.data!.commissionDisplay} (paid into your float monthly)',
-                            style: const TextStyle(color: SokoColors.orange)),
+                        GestureDetector(
+                          onTap: () async {
+                            await context.push('/earnings');
+                            _refresh();
+                          },
+                          child: Text(
+                              'Earnings: ${snap.data!.commissionDisplay} · ${snap.data!.redeemableDisplay} ready to redeem ›',
+                              style: const TextStyle(color: SokoColors.orange)),
+                        ),
                       ],
                     ],
                   ),
@@ -119,6 +127,33 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
                     },
                   ),
                 ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            GridView.count(
+              crossAxisCount: 3,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 8,
+              crossAxisSpacing: 8,
+              childAspectRatio: 1.15,
+              children: [
+                for (final (icon, label, route) in const [
+                  (Icons.phone_android, 'Airtime', '/sell/airtime'),
+                  (Icons.wifi, 'Data', '/sell/data'),
+                  (Icons.receipt_long, 'Pay bills', '/sell/bill'),
+                  (Icons.account_balance, 'Buy float', '/buy-float'),
+                  (Icons.savings_outlined, 'Earnings', '/earnings'),
+                  (Icons.description_outlined, 'Statements', '/statements'),
+                ])
+                  _SmallAction(
+                    icon: icon,
+                    label: label,
+                    onTap: () async {
+                      await context.push(route);
+                      _refresh();
+                    },
+                  ),
               ],
             ),
             const SizedBox(height: 24),
@@ -157,6 +192,29 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SmallAction extends StatelessWidget {
+  const _SmallAction({required this.icon, required this.label, required this.onTap});
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(color: SokoColors.surface, borderRadius: BorderRadius.circular(12)),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Icon(icon, color: SokoColors.orange),
+          const SizedBox(height: 6),
+          Text(label, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+        ]),
       ),
     );
   }

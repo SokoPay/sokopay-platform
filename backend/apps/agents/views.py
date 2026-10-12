@@ -401,8 +401,12 @@ class SellView(_AgentView):
         body = PaymentSerializer(payment).data
         body["transaction"] = _txn_json(txn) if txn else None
         body["float"] = _ghs(services.float_balance(agent))
-        ok = payment.status == "succeeded"
-        return Response(body, status=status.HTTP_201_CREATED if ok else status.HTTP_400_BAD_REQUEST)
+        if payment.status == "succeeded":
+            return Response(body, status=status.HTTP_201_CREATED)
+        body["error"] = ("The provider couldn't complete it. The full amount is back in your float — "
+                         "don't take the customer's cash." if payment.status in ("refunded", "failed")
+                         else "Still processing. Check History before taking the customer's cash.")
+        return Response(body, status=status.HTTP_400_BAD_REQUEST)
 
 
 # --- buying float by bank deposit ---------------------------------------------------------------
